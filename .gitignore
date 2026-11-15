@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+auth/node_modules/
+.pnpm-store/
+
+# Production builds
+dist/
+auth/dist/
+dist-ssr/
+auth/dist-ssr/
+
+# TypeScript cache
+*.tsbuildinfo
+auth/*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env.local
+.env.*.local
+*.local
+
+# Editor & OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
