@@ -35,6 +35,14 @@ export class WebSocketTransport implements Transport {
       wsUrl = `${protocol}//${window.location.host}${cleanPath}`;
     }
 
+    const token =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem('cb_access_token') || localStorage.getItem('cb_token')
+        : null;
+    if (token) {
+      wsUrl += (wsUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
+    }
+
     try {
       this.ws = new WebSocket(wsUrl);
 

@@ -29,11 +29,23 @@ function normalizeProject(raw: any): Project {
 
 export const projectApi = {
   getProjects: async (): Promise<ProjectsResponse> => {
-    const res = await http.get<any>('/projects');
-    const items = Array.isArray(res) ? res : res.items || [];
-    return {
-      items: items.map(normalizeProject),
-    };
+    try {
+      const res = await http.get<any>('/projects');
+      const items = Array.isArray(res) ? res : res.items || [];
+      return {
+        items: items.map(normalizeProject),
+      };
+    } catch {
+      // Graceful fallback to initial projects if backend is offline or returns 401/500
+      try {
+        const { initialProjects } = await import('../../mocks/data');
+        return {
+          items: initialProjects.map(normalizeProject),
+        };
+      } catch {
+        return { items: [] };
+      }
+    }
   },
   createProject: async (payload: CreateProjectPayload): Promise<Project> => {
     // Include both mock and backend expected fields

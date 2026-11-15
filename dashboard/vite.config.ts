@@ -22,6 +22,17 @@ export default defineConfig(({ mode }) => {
               target: gatewayUrl,
               changeOrigin: true,
               secure: false,
+              ws: true,
+              headers: {
+                'Bypass-Tunnel-Reminder': 'true',
+              },
+            },
+            '/ws/events': {
+              target: gatewayUrl,
+              ws: true,
+              changeOrigin: true,
+              secure: false,
+              rewrite: (path) => path.replace(/^\/ws\/events/, '/api/v1/notifications/ws'),
               headers: {
                 'Bypass-Tunnel-Reminder': 'true',
               },

@@ -27,43 +27,249 @@ export interface SessionState {
   expiresAt: number | null;
 }
 
+function parseCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+// Decode JWT exp (ms) safely for proactive scheduling only
+function decodeJwtExp(token: string): number | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonStr);
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(token: string): any {
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonStr);
+  } catch {
+    return null;
+  }
+}
+
+export function redirectToWorkspace(token?: string | null, rt?: string | null, user?: User | null) {
+  if (typeof window === 'undefined') return;
+  const workspaceBase = (import.meta as any).env?.VITE_WORKSPACE_URL || 'http://localhost:5177/';
+  const url = new URL(workspaceBase, window.location.origin);
+  const activeToken =
+    token ||
+    (typeof localStorage !== 'undefined'
+      ? localStorage.getItem('cb_access_token') || localStorage.getItem('cb_token')
+      : null);
+  const activeRt =
+    rt ||
+    (typeof localStorage !== 'undefined'
+      ? localStorage.getItem('cb_refresh_token') || localStorage.getItem('cb_rt')
+      : null);
+  const activeUser =
+    user ||
+    (typeof localStorage !== 'undefined' && localStorage.getItem('cb_user')
+      ? JSON.parse(localStorage.getItem('cb_user')!)
+      : null);
+
+  if (activeToken) {
+    url.searchParams.set('token', activeToken);
+    url.searchParams.set('access_token', activeToken);
+  }
+  if (activeRt) {
+    url.searchParams.set('rt', activeRt);
+    url.searchParams.set('refresh_token', activeRt);
+  }
+  if (activeUser) {
+    url.searchParams.set('role', activeUser.role || 'freelancer');
+    url.searchParams.set('user', encodeURIComponent(JSON.stringify(activeUser)));
+  } else {
+    url.searchParams.set('role', 'freelancer');
+  }
+  window.location.replace(url.toString());
+}
+
 function getInitialSession(): SessionState {
   if (typeof window !== 'undefined') {
     try {
-      const savedUser = localStorage.getItem('cb_user');
-      const savedToken = localStorage.getItem('cb_access_token');
-      if (savedUser) {
-        const user = JSON.parse(savedUser) as User;
-        if (savedToken) {
-          setAccessToken(savedToken);
+      const url = new URL(window.location.href);
+      let incomingToken = url.searchParams.get('token') || url.searchParams.get('access_token');
+      let incomingRt = url.searchParams.get('rt') || url.searchParams.get('refresh_token');
+      let incomingRole = url.searchParams.get('role');
+      let incomingUserStr = url.searchParams.get('user');
+
+      // Check hash params if not in query
+      if (!incomingToken && window.location.hash) {
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#\/?/, ''));
+        incomingToken = hashParams.get('token') || hashParams.get('access_token');
+        incomingRt = incomingRt || hashParams.get('rt') || hashParams.get('refresh_token');
+        incomingRole = incomingRole || hashParams.get('role');
+        incomingUserStr = incomingUserStr || hashParams.get('user');
+      }
+
+      // Check cookies
+      if (!incomingToken) {
+        incomingToken = parseCookie('cb_access_token') || parseCookie('cb_token');
+      }
+      if (!incomingRt) {
+        incomingRt = parseCookie('cb_rt') || parseCookie('cb_refresh_token');
+      }
+
+      let parsedUser: User | null = null;
+      if (incomingUserStr) {
+        try {
+          parsedUser = JSON.parse(decodeURIComponent(incomingUserStr));
+        } catch {
+          try {
+            parsedUser = JSON.parse(incomingUserStr);
+          } catch {}
         }
+      }
+
+      if (!parsedUser) {
+        const userCookie = parseCookie('cb_user');
+        if (userCookie) {
+          try {
+            parsedUser = JSON.parse(userCookie);
+          } catch {}
+        }
+      }
+
+      if (!parsedUser) {
+        const mockRtCookie = parseCookie('mock_rt');
+        if (mockRtCookie) {
+          try {
+            const jsonStr = decodeURIComponent(escape(atob(mockRtCookie)));
+            parsedUser = normalizeUser(JSON.parse(jsonStr));
+            if (!incomingToken) {
+              incomingToken = 'session-token-' + parsedUser.id;
+            }
+          } catch {}
+        }
+      }
+
+      if (!incomingToken && typeof localStorage !== 'undefined') {
+        incomingToken = localStorage.getItem('cb_access_token') || localStorage.getItem('cb_token');
+      }
+      if (!incomingRt && typeof localStorage !== 'undefined') {
+        incomingRt = localStorage.getItem('cb_refresh_token') || localStorage.getItem('cb_rt');
+      }
+      if (!parsedUser && typeof localStorage !== 'undefined') {
+        const savedUser = localStorage.getItem('cb_user');
+        if (savedUser) {
+          try {
+            parsedUser = JSON.parse(savedUser);
+          } catch {}
+        }
+      }
+
+      // Save token immediately
+      if (incomingToken) {
+        setAccessToken(incomingToken);
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem('cb_access_token', incomingToken);
+          localStorage.setItem('cb_token', incomingToken);
+        }
+      }
+
+      if (incomingRt && typeof localStorage !== 'undefined') {
+        localStorage.setItem('cb_refresh_token', incomingRt);
+        localStorage.setItem('cb_rt', incomingRt);
+      }
+
+      // If user profile is not yet available but token exists, decode JWT payload
+      if (!parsedUser && incomingToken) {
+        const payload = decodeJwtPayload(incomingToken);
+        if (payload) {
+          parsedUser = {
+            id: payload.sub || payload.id || 'user-owner-1',
+            email: payload.email || 'owner@codebridge.dev',
+            displayName: payload.displayName || payload.name || payload.email?.split('@')[0] || 'Project Owner',
+            role: (payload.role as UserRole) || (incomingRole as UserRole) || 'owner',
+            status: payload.status === 'suspended' ? 'suspended' : 'active',
+            createdAt: payload.createdAt || new Date().toISOString(),
+          };
+        } else {
+          parsedUser = {
+            id: 'user-owner-1',
+            email: 'owner@codebridge.dev',
+            displayName: 'Project Owner',
+            role: (incomingRole as UserRole) || 'owner',
+            status: 'active',
+            createdAt: new Date().toISOString(),
+          };
+        }
+      }
+
+      if (parsedUser && typeof localStorage !== 'undefined') {
+        localStorage.setItem('cb_user', JSON.stringify(parsedUser));
+      }
+
+      const effectiveRole = parsedUser?.role || (incomingRole as UserRole) || 'owner';
+      const isFreelancerRole = effectiveRole === 'freelancer' || parsedUser?.role === 'freelancer';
+      const isFreelancerRoute = window.location.pathname.startsWith('/freelancer');
+
+      // Requirement: if route is /freelancer OR user is freelancer, immediately redirect to workspace!
+      if (isFreelancerRole || isFreelancerRoute) {
+        redirectToWorkspace(incomingToken, incomingRt, parsedUser);
         return {
-          status: 'authenticated',
-          user,
-          accessToken: savedToken || null,
+          status: 'loading',
+          user: parsedUser,
+          accessToken: incomingToken || null,
           expiresAt: null,
         };
       }
 
-      // Check mock_rt cookie shared across ports
-      if (typeof document !== 'undefined') {
-        const match = document.cookie.match(/(?:^|;\s*)mock_rt=([^;]*)/);
-        if (match) {
-          const jsonStr = decodeURIComponent(escape(atob(decodeURIComponent(match[1]))));
-          const mockUser = JSON.parse(jsonStr);
-          const user = normalizeUser(mockUser);
-          return {
-            status: user.status === 'suspended' ? 'suspended' : 'authenticated',
-            user,
-            accessToken: 'session-token-' + user.id,
-            expiresAt: Date.now() + 3600 * 1000,
-          };
-        }
+      // Clean URL params
+      if (
+        url.searchParams.has('token') ||
+        url.searchParams.has('access_token') ||
+        url.searchParams.has('rt') ||
+        url.searchParams.has('refresh_token') ||
+        url.searchParams.has('role') ||
+        url.searchParams.has('user')
+      ) {
+        url.searchParams.delete('token');
+        url.searchParams.delete('access_token');
+        url.searchParams.delete('rt');
+        url.searchParams.delete('refresh_token');
+        url.searchParams.delete('role');
+        url.searchParams.delete('user');
+        const cleanQuery = url.searchParams.toString();
+        const cleanUrl = `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', cleanUrl);
       }
-    } catch {
-      // ignore JSON parse error
+
+      if (parsedUser) {
+        return {
+          status: parsedUser.status === 'suspended' ? 'suspended' : 'authenticated',
+          user: parsedUser,
+          accessToken: incomingToken || null,
+          expiresAt: incomingToken ? decodeJwtExp(incomingToken) : null,
+        };
+      }
+    } catch (e) {
+      console.warn('Error in getInitialSession', e);
     }
   }
+
   return {
     status: 'loading',
     user: null,
@@ -130,25 +336,6 @@ export const sessionStore = {
 
 export function useSession(): SessionState {
   return useSyncExternalStore(sessionStore.subscribe, sessionStore.getState);
-}
-
-// Decode JWT exp (ms) safely for proactive scheduling only
-function decodeJwtExp(token: string): number | null {
-  try {
-    const parts = token.split('.');
-    if (parts.length < 2) return null;
-    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
-    const jsonStr = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    const payload = JSON.parse(jsonStr);
-    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
-  } catch {
-    return null;
-  }
 }
 
 function scheduleProactiveRefresh(token: string) {
@@ -257,8 +444,8 @@ export async function refreshSession(): Promise<string | null> {
 
       if (err instanceof ApiError && err.code === 'ACCOUNT_SUSPENDED') {
         sessionStore.setState({ status: 'suspended', accessToken: null });
-      } else if (state.status === 'authenticated') {
-        sessionStore.setState({ status: 'expired', accessToken: null });
+      } else if (state.user || state.status === 'authenticated') {
+        sessionStore.setState({ status: 'authenticated' });
       } else {
         sessionStore.setState({ status: 'anonymous', accessToken: null, user: null });
         if (typeof localStorage !== 'undefined') {

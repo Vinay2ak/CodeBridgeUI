@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { Navigate } from 'react-router-dom';
-import { useSession } from '../features/session/session';
+import { useSession, redirectToWorkspace } from '../features/session/session';
 import { Skeleton } from '../components/ui/Skeleton';
 import { SuspendedScreen } from '../features/session/SuspendedScreen';
 import { SessionExpiredModal } from '../features/session/SessionExpiredModal';
@@ -39,14 +39,38 @@ export const FullScreenSkeleton: React.FC = () => {
   );
 };
 
+export const FreelancerRedirect: React.FC = () => {
+  const { user } = useSession();
+
+  useEffect(() => {
+    redirectToWorkspace(null, null, user);
+  }, [user]);
+
+  return <FullScreenSkeleton />;
+};
+
 export const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { status, user } = useSession();
 
   useEffect(() => {
+    if (
+      user?.role === 'freelancer' ||
+      (typeof window !== 'undefined' && window.location.pathname.startsWith('/freelancer'))
+    ) {
+      redirectToWorkspace(null, null, user);
+      return;
+    }
     if (status === 'anonymous' || (!user && status !== 'loading')) {
       window.location.assign(env.VITE_SIGNIN_URL || 'http://localhost:5173/login');
     }
   }, [status, user]);
+
+  if (
+    user?.role === 'freelancer' ||
+    (typeof window !== 'undefined' && window.location.pathname.startsWith('/freelancer'))
+  ) {
+    return <FullScreenSkeleton />;
+  }
 
   if (status === 'loading') {
     return <FullScreenSkeleton />;
@@ -78,6 +102,11 @@ export const RoleGuard: React.FC<{ requiredRole: 'owner' | 'freelancer' | 'admin
     return null;
   }
 
+  if (user.role === 'freelancer') {
+    redirectToWorkspace(null, null, user);
+    return <FullScreenSkeleton />;
+  }
+
   // If user role does not match, redirect to user's own role route
   if (user.role !== requiredRole) {
     return <Navigate to={`/${user.role}`} replace />;
@@ -93,5 +122,10 @@ export const RootRedirect: React.FC = () => {
     return null;
   }
 
-  return <Navigate to={`/${user.role}`} replace />;
+  if (user.role === 'freelancer') {
+    redirectToWorkspace(null, null, user);
+    return <FullScreenSkeleton />;
+  }
+
+  return <Navigate to="/owner" replace />;
 };

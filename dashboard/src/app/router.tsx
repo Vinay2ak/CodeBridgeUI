@@ -1,7 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
-import { AuthGuard, FullScreenSkeleton } from './guards';
+import { AuthGuard, FreelancerRedirect, FullScreenSkeleton } from './guards';
 import { ErrorBoundary } from './ErrorBoundary';
 import { NotFound } from './NotFound';
 
@@ -29,9 +29,10 @@ export const AppRoutes: React.FC = () => {
                 </ErrorBoundary>
               }
             />
-            {/* Redirect any legacy routes to Project Owner Dashboard */}
+            {/* Legacy admin route redirects to owner */}
             <Route path="/admin" element={<Navigate to="/owner" replace />} />
-            <Route path="/freelancer" element={<Navigate to="/owner" replace />} />
+            {/* Freelancer route redirects to Freelancer Workspace on port 5177 */}
+            <Route path="/freelancer" element={<FreelancerRedirect />} />
             <Route
               path="*"
               element={

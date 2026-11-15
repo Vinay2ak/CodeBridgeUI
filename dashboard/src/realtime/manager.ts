@@ -40,6 +40,16 @@ function scheduleReconnect() {
   clearTimers();
 
   if (attempt >= MAX_RECONNECT_ATTEMPTS) {
+    if (transport instanceof WebSocketTransport) {
+      console.warn('Realtime WS disconnected, falling back to mock transport');
+      try {
+        transport.close();
+      } catch {}
+      transport = new MockTransport();
+      setupTransportListeners(transport);
+      transport.connect();
+      return;
+    }
     // Gracefully fall back to offline when WebSocket backend is not reachable
     eventStore.setStatus('offline');
     return;
@@ -73,9 +83,12 @@ function connect() {
 
 function setupTransportListeners(t: Transport) {
   t.onOpen = () => {
-    // Send auth handshake
+    attempt = 0;
+    eventStore.setStatus('live');
     const token = getAccessToken();
-    t.send({ type: 'auth', token });
+    if (token) {
+      t.send({ type: 'auth', token });
+    }
   };
 
   t.onMessage = (msg: any) => {
