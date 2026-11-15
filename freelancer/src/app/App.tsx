@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useSyncExternalStore } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { sessionStore } from "../session/session";
 import { SuspendedScreen } from "../session/SuspendedScreen";
 import { SessionExpiredModal } from "../session/SessionExpiredModal";
@@ -12,6 +12,7 @@ import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "../components/ui/Button";
 
 const WorkspaceAppInner: React.FC = () => {
+  const queryClient = useQueryClient();
   const session = useSyncExternalStore(
     (cb) => sessionStore.subscribe(cb),
     () => sessionStore.getState()
@@ -110,6 +111,7 @@ const WorkspaceAppInner: React.FC = () => {
         onSelectTask={(id) => {
           setTaskId(id);
           setCurrentTaskIdState(id);
+          queryClient.invalidateQueries({ queryKey: ["tasks", "mine"] });
         }}
         hasTasks={tasks.length > 0}
       />

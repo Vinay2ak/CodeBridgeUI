@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
   const gatewayUrl = (
     env.VITE_API_URL ||
     env.VITE_GATEWAY_URL ||
-    "https://itchy-weeks-travel.loca.lt"
+    "http://localhost:8000"
   )
     .trim()
     .replace(/\/$/, "");
@@ -24,6 +24,7 @@ export default defineConfig(({ mode }) => {
             "/api": {
               target: gatewayUrl,
               changeOrigin: true,
+              ws: true,
               secure: false,
               headers: {
                 "Bypass-Tunnel-Reminder": "true",
@@ -34,6 +35,7 @@ export default defineConfig(({ mode }) => {
               ws: true,
               changeOrigin: true,
               secure: false,
+              rewrite: (path) => path.replace(/^\/ws(\/events)?/, "/api/v1/notifications/ws"),
               headers: {
                 "Bypass-Tunnel-Reminder": "true",
               },

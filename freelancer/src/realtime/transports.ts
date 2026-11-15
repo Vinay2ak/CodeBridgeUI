@@ -19,19 +19,34 @@ export class WebSocketTransport implements RealtimeTransport {
   private ws: WebSocket | null = null;
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private pingTimer: ReturnType<typeof setInterval> | null = null;
   private isClosed = false;
   private currentToken: string | null = null;
 
   constructor(private callbacks: TransportEvents) {}
 
   private getWsUrl(): string {
-    const raw = env.wsUrl;
+    const raw = env.wsUrl || "/api/v1/notifications/ws";
+    let base: string;
     if (raw.startsWith("ws://") || raw.startsWith("wss://")) {
-      return raw;
+      base = raw;
+    } else {
+      const origin = window.location.origin.replace(/^http/, "ws");
+      const path = raw.startsWith("/") ? raw : `/${raw}`;
+      base = `${origin}${path}`;
     }
-    const origin = window.location.origin.replace(/^http/, "ws");
-    const path = raw.startsWith("/") ? raw : `/${raw}`;
-    return `${origin}${path}`;
+
+    const token =
+      this.currentToken ||
+      (typeof localStorage !== "undefined"
+        ? localStorage.getItem("cb_access_token")
+        : null);
+
+    if (token) {
+      const sep = base.includes("?") ? "&" : "?";
+      base = `${base}${sep}token=${encodeURIComponent(token)}`;
+    }
+    return base;
   }
 
   public connect(token: string | null): void {
@@ -48,15 +63,30 @@ export class WebSocketTransport implements RealtimeTransport {
 
     this.ws.onopen = () => {
       this.attempt = 0;
+      this.callbacks.onStatus("live");
       if (this.currentToken) {
         this.sendAuth(this.currentToken);
       }
+      if (this.pingTimer) clearInterval(this.pingTimer);
+      this.pingTimer = setInterval(() => {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          try {
+            this.ws.send("ping");
+          } catch {
+            // Ignored
+          }
+        }
+      }, 25000);
     };
 
     this.ws.onmessage = (event) => {
       try {
         const parsed = JSON.parse(event.data);
-        if (parsed.type === "auth.ok") {
+        if (
+          parsed.type === "auth.ok" ||
+          parsed.event === "connected" ||
+          parsed.event === "pong"
+        ) {
           this.callbacks.onStatus("live");
           return;
         }
@@ -71,6 +101,10 @@ export class WebSocketTransport implements RealtimeTransport {
     };
 
     this.ws.onclose = () => {
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer);
+        this.pingTimer = null;
+      }
       if (!this.isClosed) {
         this.scheduleReconnect();
       }
@@ -80,7 +114,11 @@ export class WebSocketTransport implements RealtimeTransport {
   public sendAuth(token: string): void {
     this.currentToken = token;
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "auth", token }));
+      try {
+        this.ws.send(JSON.stringify({ type: "auth", token }));
+      } catch {
+        // Ignored
+      }
     }
   }
 
@@ -113,6 +151,10 @@ export class WebSocketTransport implements RealtimeTransport {
 
   public close(): void {
     this.isClosed = true;
+    if (this.pingTimer) {
+      clearInterval(this.pingTimer);
+      this.pingTimer = null;
+    }
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     if (this.ws) {
       this.ws.close();

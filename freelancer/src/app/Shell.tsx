@@ -3,16 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import {
   Code2,
   User as UserIcon,
-  LayoutDashboard,
   Settings,
   LogOut,
-  FolderCode,
   Keyboard,
   Wrench,
+  Briefcase,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
 import { TaskSwitcher } from "../features/task/TaskSwitcher";
+import { TaskMarketplace } from "../features/task/TaskMarketplace";
 import { EscrowBar } from "../features/task/EscrowBar";
 import { TaskPanel } from "../features/task/TaskPanel";
 import { WorkspaceStatusCard } from "../features/task/WorkspaceStatusCard";
@@ -51,8 +51,16 @@ export const Shell: React.FC<ShellProps> = ({
   const [mobileColumn, setMobileColumn] = useState<"task" | "code" | "run" | "status">("task");
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [showMarketplace, setShowMarketplace] = useState(!hasTasks);
 
-  const activeId = hasTasks ? currentTaskId : null;
+  // If tasks become available or empty, adjust marketplace visibility
+  useEffect(() => {
+    if (!hasTasks) {
+      setShowMarketplace(true);
+    }
+  }, [hasTasks]);
+
+  const activeId = hasTasks && !showMarketplace ? currentTaskId : null;
   const filesState = useFiles(activeId || "");
 
   const { data: wsData } = useQuery({
@@ -88,9 +96,9 @@ export const Shell: React.FC<ShellProps> = ({
 
   const userMenuItems: MenuItem[] = [
     {
-      label: "Dashboard",
-      icon: <LayoutDashboard className="h-4 w-4" aria-hidden="true" />,
-      href: `${env.dashboardUrl}/freelancer`,
+      label: "Task Marketplace",
+      icon: <Briefcase className="h-4 w-4" aria-hidden="true" />,
+      onClick: () => setShowMarketplace(true),
     },
     {
       label: "Account",
@@ -155,8 +163,25 @@ export const Shell: React.FC<ShellProps> = ({
           </h1>
 
           {hasTasks && (
-            <div className="min-w-0">
-              <TaskSwitcher currentTaskId={currentTaskId} onSelectTask={onSelectTask} />
+            <div className="flex items-center gap-2 min-w-0">
+              <TaskSwitcher
+                currentTaskId={currentTaskId}
+                onSelectTask={(id) => {
+                  onSelectTask(id);
+                  setShowMarketplace(false);
+                }}
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => setShowMarketplace((prev) => !prev)}
+                className="text-xs h-8 px-2.5 text-muted hover:text-ink shrink-0"
+              >
+                <Briefcase className="h-3.5 w-3.5" aria-hidden="true" />
+                <span className="hidden lg:inline">
+                  {showMarketplace ? "Active Workspace" : "Browse Tasks"}
+                </span>
+              </Button>
             </div>
           )}
         </div>
@@ -186,22 +211,16 @@ export const Shell: React.FC<ShellProps> = ({
       </header>
 
       {/* Main Content Area */}
-      {!hasTasks ? (
-        <main id="main-content" className="flex-1 flex items-center justify-center p-6">
-          <div className="max-w-md w-full rounded-xl border border-line bg-surface p-8 text-center shadow-sm">
-            <FolderCode className="h-12 w-12 text-muted mx-auto mb-4" aria-hidden="true" />
-            <h2 className="text-lg font-bold text-ink mb-2">No tasks assigned yet</h2>
-            <p className="text-sm text-muted mb-6 leading-relaxed">
-              You do not have any active or pending development tasks. Browse open project requests from clients on the freelancer dashboard.
-            </p>
-            <a
-              href={`${env.dashboardUrl}/freelancer`}
-              className="inline-flex items-center justify-center gap-2 rounded-lg h-10 px-4 text-sm font-medium transition-colors bg-primary text-on-primary hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-            >
-              <LayoutDashboard className="h-4 w-4" aria-hidden="true" />
-              <span>Go to Freelancer Dashboard</span>
-            </a>
-          </div>
+      {!hasTasks || showMarketplace ? (
+        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+          <TaskMarketplace
+            onSelectTask={(taskId) => {
+              onSelectTask(taskId);
+              setShowMarketplace(false);
+            }}
+            hasExistingTasks={hasTasks}
+            onBack={hasTasks ? () => setShowMarketplace(false) : undefined}
+          />
         </main>
       ) : (
         <div className="flex-1 flex flex-col min-h-0">

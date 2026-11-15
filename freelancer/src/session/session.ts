@@ -37,7 +37,12 @@ class SessionStore {
 
   constructor() {
     configureHttpAuth(
-      () => this.state.accessToken,
+      () =>
+        this.state.accessToken ||
+        (typeof localStorage !== "undefined"
+          ? localStorage.getItem("cb_access_token") ||
+            localStorage.getItem("cb_token")
+          : null),
       () => this.refreshSession()
     );
 
@@ -147,11 +152,39 @@ class SessionStore {
 
     this.refreshPromise = (async () => {
       try {
+        let storedToken: string | null = null;
         let storedRt: string | null = null;
 
         if (typeof window !== "undefined") {
           const urlParams = new URLSearchParams(window.location.search);
-          const urlRt = urlParams.get("rt") || urlParams.get("refresh_token");
+          const hashParams = new URLSearchParams(
+            window.location.hash.replace(/^#\/?/, "")
+          );
+
+          const urlToken =
+            urlParams.get("token") ||
+            urlParams.get("access_token") ||
+            urlParams.get("accessToken") ||
+            hashParams.get("token") ||
+            hashParams.get("access_token");
+
+          const urlRt =
+            urlParams.get("rt") ||
+            urlParams.get("refresh_token") ||
+            urlParams.get("refreshToken") ||
+            hashParams.get("rt") ||
+            hashParams.get("refresh_token");
+
+          if (urlToken) {
+            storedToken = urlToken;
+            if (typeof localStorage !== "undefined") {
+              localStorage.setItem("cb_access_token", urlToken);
+            }
+            urlParams.delete("token");
+            urlParams.delete("access_token");
+            urlParams.delete("accessToken");
+          }
+
           if (urlRt) {
             storedRt = urlRt;
             if (typeof localStorage !== "undefined") {
@@ -159,55 +192,99 @@ class SessionStore {
             }
             urlParams.delete("rt");
             urlParams.delete("refresh_token");
+            urlParams.delete("refreshToken");
+          }
+
+          if (urlToken || urlRt) {
             const newQuery = urlParams.toString();
-            const cleanUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ""}${window.location.hash}`;
+            const cleanUrl = `${window.location.pathname}${
+              newQuery ? `?${newQuery}` : ""
+            }`;
             window.history.replaceState({}, "", cleanUrl);
           }
         }
 
+        if (!storedToken && typeof localStorage !== "undefined") {
+          storedToken =
+            localStorage.getItem("cb_access_token") ||
+            localStorage.getItem("cb_token");
+        }
+
         if (!storedRt && typeof localStorage !== "undefined") {
           storedRt =
-            localStorage.getItem("cb_refresh_token") || localStorage.getItem("cb_rt");
+            localStorage.getItem("cb_refresh_token") ||
+            localStorage.getItem("cb_rt");
         }
 
         if (!storedRt && typeof document !== "undefined") {
-          const match = document.cookie.match(/(?:^|;\s*)(?:cb_rt|cb_refresh_token)=([^;]*)/);
+          const match = document.cookie.match(
+            /(?:^|;\s*)(?:cb_rt|cb_refresh_token)=([^;]*)/
+          );
           if (match) {
             storedRt = decodeURIComponent(match[1]);
           }
         }
 
-        if (!storedRt && !env.useMocks) {
+        if (!storedRt && !storedToken && !env.useMocks) {
           return null;
         }
 
-        const data = await request<any>("/auth/refresh", {
-          method: "POST",
-          body: storedRt ? JSON.stringify({ refresh_token: storedRt }) : undefined,
-          skipAuth: true,
-        });
-
-        const accessToken = data.accessToken || data.access_token;
-        if (data.refresh_token && typeof localStorage !== "undefined") {
-          localStorage.setItem("cb_refresh_token", data.refresh_token);
-        }
-        const expiresIn = data.expiresIn || data.expires_in || 900;
-        const expiresAt = Date.now() + expiresIn * 1000;
-
+        let accessToken: string | null = storedToken;
+        let expiresIn = 900;
         let user: User | null = null;
-        const rawUser = data.user || data.data?.user;
-        if (rawUser) {
-          const roleStr = (rawUser.role || "freelancer").toLowerCase();
-          user = {
-            id: rawUser.id || "anonymous",
-            email: rawUser.email || "",
-            displayName: rawUser.full_name || rawUser.displayName || rawUser.email?.split("@")[0] || "Freelancer",
-            role: roleStr as "freelancer",
-            status: rawUser.is_active === false || rawUser.status === "suspended" ? "suspended" : "active",
-            createdAt: rawUser.created_at || rawUser.createdAt || new Date().toISOString(),
-            onboardingCompleted: true,
-          };
+
+        if (storedRt || env.useMocks) {
+          try {
+            const data = await request<any>("/auth/refresh", {
+              method: "POST",
+              body: storedRt ? JSON.stringify({ refresh_token: storedRt }) : undefined,
+              skipAuth: true,
+            });
+
+            if (data.accessToken || data.access_token) {
+              accessToken = data.accessToken || data.access_token;
+            }
+            if (data.refresh_token && typeof localStorage !== "undefined") {
+              localStorage.setItem("cb_refresh_token", data.refresh_token);
+            }
+            expiresIn = data.expiresIn || data.expires_in || 900;
+
+            const rawUser = data.user || data.data?.user;
+            if (rawUser) {
+              const roleStr = (rawUser.role || "freelancer").toLowerCase();
+              user = {
+                id: rawUser.id || "anonymous",
+                email: rawUser.email || "",
+                displayName:
+                  rawUser.full_name ||
+                  rawUser.displayName ||
+                  rawUser.email?.split("@")[0] ||
+                  "Freelancer",
+                role: roleStr as "freelancer",
+                status:
+                  rawUser.is_active === false || rawUser.status === "suspended"
+                    ? "suspended"
+                    : "active",
+                createdAt:
+                  rawUser.created_at || rawUser.createdAt || new Date().toISOString(),
+                onboardingCompleted: true,
+              };
+            }
+          } catch (refreshErr) {
+            // If refresh fails but we have a saved token, use the saved token
+            if (!storedToken) throw refreshErr;
+          }
         }
+
+        if (!accessToken && !env.useMocks) {
+          return null;
+        }
+
+        if (accessToken && typeof localStorage !== "undefined") {
+          localStorage.setItem("cb_access_token", accessToken);
+        }
+
+        const expiresAt = Date.now() + expiresIn * 1000;
 
         this.setState({
           accessToken,
@@ -215,8 +292,10 @@ class SessionStore {
           ...(user ? { user } : {}),
         });
 
-        realtimeManager.reauth(accessToken);
-        this.scheduleProactiveRefresh(data.expiresIn);
+        if (accessToken) {
+          realtimeManager.reauth(accessToken);
+        }
+        this.scheduleProactiveRefresh(expiresIn);
 
         return accessToken;
       } catch (err: unknown) {
@@ -280,6 +359,12 @@ class SessionStore {
   }
 
   private clearLocalSession(): void {
+    if (typeof localStorage !== "undefined") {
+      localStorage.removeItem("cb_access_token");
+      localStorage.removeItem("cb_token");
+      localStorage.removeItem("cb_refresh_token");
+      localStorage.removeItem("cb_rt");
+    }
     realtimeManager.stop();
     this.setState({
       status: "loading",
