@@ -1,0 +1,50 @@
+:root {
+  --primary-hover: color-mix(in srgb, var(--primary) 88%, white);
+  --primary-active: color-mix(in srgb, var(--primary) 88%, black);
+  --control-border: color-mix(in srgb, var(--text-muted) 80%, var(--surface));
+  --input-bg: var(--bg);
+  --money-text: color-mix(in srgb, var(--money) 65%, white);
+  --success-bg: color-mix(in srgb, var(--success) 14%, var(--surface));
+  --warning-bg: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  --danger-bg: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --money-bg: color-mix(in srgb, var(--money) 14%, var(--surface));
+  --info-bg: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  --selected-bg: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  --success-border: color-mix(in srgb, var(--success) 45%, var(--surface));
+  --warning-border: color-mix(in srgb, var(--warning) 45%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--danger) 45%, var(--surface));
+  --money-border: color-mix(in srgb, var(--money) 45%, var(--surface));
+  --info-border: color-mix(in srgb, var(--primary) 45%, var(--surface));
+  --on-danger: var(--on-primary);
+  --overlay: color-mix(in srgb, var(--bg) 72%, transparent);
+  --selection: color-mix(in srgb, var(--primary) 35%, transparent);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.4), 0 1px 2px -1px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -2px rgba(0, 0, 0, 0.5);
+  --brand-gradient: radial-gradient(60% 50% at 15% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent), linear-gradient(160deg, var(--surface), var(--bg));
+}
+
+:root[data-theme="light"] {
+  --primary-hover: color-mix(in srgb, var(--primary) 88%, white);
+  --primary-active: color-mix(in srgb, var(--primary) 88%, black);
+  --control-border: color-mix(in srgb, var(--text-muted) 80%, var(--surface));
+  --input-bg: var(--surface);
+  --money-text: color-mix(in srgb, var(--money) 70%, black);
+  --success-bg: color-mix(in srgb, var(--success) 14%, var(--surface));
+  --warning-bg: color-mix(in srgb, var(--warning) 14%, var(--surface));
+  --danger-bg: color-mix(in srgb, var(--danger) 14%, var(--surface));
+  --money-bg: color-mix(in srgb, var(--money) 14%, var(--surface));
+  --info-bg: color-mix(in srgb, var(--primary) 14%, var(--surface));
+  --selected-bg: color-mix(in srgb, var(--primary) 12%, var(--surface));
+  --success-border: color-mix(in srgb, var(--success) 45%, var(--surface));
+  --warning-border: color-mix(in srgb, var(--warning) 45%, var(--surface));
+  --danger-border: color-mix(in srgb, var(--danger) 45%, var(--surface));
+  --money-border: color-mix(in srgb, var(--money) 45%, var(--surface));
+  --info-border: color-mix(in srgb, var(--primary) 45%, var(--surface));
+  --on-danger: var(--on-primary);
+  --overlay: color-mix(in srgb, var(--bg) 72%, transparent);
+  --selection: color-mix(in srgb, var(--primary) 35%, transparent);
+  --shadow-sm: 0 1px 3px 0 rgba(11, 19, 43, 0.08), 0 1px 2px -1px rgba(11, 19, 43, 0.08);
+  --shadow-md: 0 4px 6px -1px rgba(11, 19, 43, 0.12), 0 2px 4px -2px rgba(11, 19, 43, 0.12);
+  --brand-gradient: radial-gradient(60% 50% at 15% 0%, color-mix(in srgb, var(--primary) 18%, transparent), transparent), linear-gradient(160deg, var(--surface), var(--bg));
+}
+

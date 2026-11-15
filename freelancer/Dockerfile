@@ -1,0 +1,47 @@
+# Build stage
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Build arguments for all VITE_ environment variables
+ARG VITE_USE_MOCKS="false"
+ARG VITE_API_BASE_URL="/api/v1"
+ARG VITE_GATEWAY_URL="http://localhost:8080"
+ARG VITE_BASE_PATH="/"
+ARG VITE_SIGNIN_URL="http://localhost:5173/login"
+ARG VITE_REGISTER_URL="http://localhost:5173/register"
+ARG VITE_DASHBOARD_URL="http://localhost:5175"
+ARG VITE_ACCOUNT_URL="http://localhost:5176/"
+ARG VITE_WS_URL="/ws/events"
+ARG VITE_DEV_TOOLS="false"
+ARG VITE_MOCK_TOKEN_TTL_SECONDS="900"
+
+# Export as environment variables for build step
+ENV VITE_USE_MOCKS=$VITE_USE_MOCKS
+ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_GATEWAY_URL=$VITE_GATEWAY_URL
+ENV VITE_BASE_PATH=$VITE_BASE_PATH
+ENV VITE_SIGNIN_URL=$VITE_SIGNIN_URL
+ENV VITE_REGISTER_URL=$VITE_REGISTER_URL
+ENV VITE_DASHBOARD_URL=$VITE_DASHBOARD_URL
+ENV VITE_ACCOUNT_URL=$VITE_ACCOUNT_URL
+ENV VITE_WS_URL=$VITE_WS_URL
+ENV VITE_DEV_TOOLS=$VITE_DEV_TOOLS
+ENV VITE_MOCK_TOKEN_TTL_SECONDS=$VITE_MOCK_TOKEN_TTL_SECONDS
+
+COPY package*.json ./
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+# Runtime stage
+FROM nginx:1.27-alpine
+
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
+

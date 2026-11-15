@@ -1,0 +1,58 @@
+/* CodeBridge syntax highlighting rules mapped strictly to design tokens */
+.hljs {
+  color: var(--text);
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-subst {
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.hljs-string,
+.hljs-title.class_,
+.hljs-section,
+.hljs-template-tag,
+.hljs-template-variable,
+.hljs-addition {
+  color: var(--success);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-attr,
+.hljs-variable.constant_ {
+  color: var(--warning);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-deletion {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-function {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.hljs-built_in,
+.hljs-type,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-attribute {
+  color: var(--text);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: bold;
+}
+
