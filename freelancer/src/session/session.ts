@@ -127,6 +127,10 @@ class SessionStore {
 
       realtimeManager.start(token);
     } catch (err: unknown) {
+      if (this.state.user && (this.state.accessToken || typeof localStorage !== "undefined" && localStorage.getItem("cb_access_token"))) {
+        this.setState({ status: "authenticated" });
+        return;
+      }
       if (err instanceof ApiError) {
         if (err.code === "ACCOUNT_SUSPENDED" || err.status === 403) {
           this.setState({ status: "suspended" });
@@ -175,10 +179,26 @@ class SessionStore {
             hashParams.get("rt") ||
             hashParams.get("refresh_token");
 
+          const urlUser = urlParams.get("user") || hashParams.get("user");
+          let initialUser: User | null = null;
+          if (urlUser) {
+            try {
+              initialUser = JSON.parse(decodeURIComponent(urlUser));
+            } catch {
+              try {
+                initialUser = JSON.parse(urlUser);
+              } catch {}
+            }
+            if (initialUser && typeof localStorage !== "undefined") {
+              localStorage.setItem("cb_user", JSON.stringify(initialUser));
+            }
+          }
+
           if (urlToken) {
             storedToken = urlToken;
             if (typeof localStorage !== "undefined") {
               localStorage.setItem("cb_access_token", urlToken);
+              localStorage.setItem("cb_token", urlToken);
             }
             urlParams.delete("token");
             urlParams.delete("access_token");
@@ -189,13 +209,18 @@ class SessionStore {
             storedRt = urlRt;
             if (typeof localStorage !== "undefined") {
               localStorage.setItem("cb_refresh_token", urlRt);
+              localStorage.setItem("cb_rt", urlRt);
             }
             urlParams.delete("rt");
             urlParams.delete("refresh_token");
             urlParams.delete("refreshToken");
           }
+          if (urlUser) {
+            urlParams.delete("user");
+            urlParams.delete("role");
+          }
 
-          if (urlToken || urlRt) {
+          if (urlToken || urlRt || urlUser) {
             const newQuery = urlParams.toString();
             const cleanUrl = `${window.location.pathname}${
               newQuery ? `?${newQuery}` : ""
@@ -282,6 +307,15 @@ class SessionStore {
 
         if (accessToken && typeof localStorage !== "undefined") {
           localStorage.setItem("cb_access_token", accessToken);
+        }
+
+        if (!user && typeof localStorage !== "undefined") {
+          const savedUser = localStorage.getItem("cb_user");
+          if (savedUser) {
+            try {
+              user = JSON.parse(savedUser);
+            } catch {}
+          }
         }
 
         const expiresAt = Date.now() + expiresIn * 1000;
