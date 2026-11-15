@@ -17,8 +17,11 @@ export interface CreateProjectPayload {
   repo: string;
   budget: number;
   description?: string;
+  expectedResult?: string;
+  deadline?: string;
   tags?: string[];
   status?: ProjectStatus;
+  freelancerName?: string;
 }
 
 export interface ProjectsResponse {

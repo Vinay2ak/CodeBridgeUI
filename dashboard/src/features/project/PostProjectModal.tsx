@@ -1,20 +1,35 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, FolderGit2, DollarSign, GitBranch, Layers, CheckCircle2 } from 'lucide-react';
+import {
+  X,
+  Plus,
+  FolderGit2,
+  DollarSign,
+  GitBranch,
+  Layers,
+  CheckCircle2,
+  ShieldCheck,
+  UserCheck,
+} from 'lucide-react';
 import { Button } from '../../components/ui/Button';
 import { projectApi } from '../../services/project/api';
 import { CreateProjectPayload, ProjectStatus } from '../../services/project/types';
 import { useToast } from '../../components/ui/Toast';
+import { DeveloperProfile } from '../talent/types';
 
 interface PostProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onProjectCreated: () => void;
+  selectedDeveloper?: DeveloperProfile | null;
+  onClearDeveloper?: () => void;
 }
 
 export const PostProjectModal: React.FC<PostProjectModalProps> = ({
   isOpen,
   onClose,
   onProjectCreated,
+  selectedDeveloper,
+  onClearDeveloper,
 }) => {
   const { addToast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -23,7 +38,7 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
   const [title, setTitle] = useState('');
   const [repo, setRepo] = useState('');
   const [budget, setBudget] = useState('1000');
-  const [status, setStatus] = useState<ProjectStatus>('draft');
+  const [status, setStatus] = useState<ProjectStatus>('in_progress');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('TypeScript, React');
 
@@ -32,11 +47,25 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
   useEffect(() => {
     if (isOpen) {
       setError(null);
+      if (selectedDeveloper) {
+        setTags(selectedDeveloper.skills.slice(0, 4).join(', '));
+        setBudget(String(selectedDeveloper.suggestedBudget || 850));
+        setStatus('in_progress');
+        if (!title) {
+          setTitle(`Fix & Optimize: ${selectedDeveloper.skills[0] || 'Core'} Module`);
+        }
+        if (!repo) {
+          setRepo(`codebridge/${selectedDeveloper.skills[0]?.toLowerCase() || 'service'}-app`);
+        }
+      } else {
+        setBudget('1000');
+        setTags('TypeScript, React');
+      }
       setTimeout(() => {
         titleInputRef.current?.focus();
       }, 50);
     }
-  }, [isOpen]);
+  }, [isOpen, selectedDeveloper]);
 
   // Esc key closes modal
   useEffect(() => {
@@ -81,7 +110,13 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
         repo: repo.trim(),
         budget: numBudget,
         status,
-        description: description.trim() || undefined,
+        freelancerName: selectedDeveloper?.name || undefined,
+        description:
+          description.trim() ||
+          `Deliverables and verified testing requirements for ${title.trim()}${
+            selectedDeveloper ? ` assigned to ${selectedDeveloper.name}` : ''
+          }`,
+        expectedResult: `Verified code delivery passing all test suites for ${title.trim()}`,
         tags: tags
           .split(',')
           .map((t) => t.trim())
@@ -91,7 +126,7 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
       await projectApi.createProject(payload);
 
       addToast({
-        title: 'Project Posted',
+        title: selectedDeveloper ? `Assigned to ${selectedDeveloper.name}` : 'Project Posted',
         description: `"${payload.title}" is now active in your dashboard.`,
         type: 'success',
       });
@@ -135,10 +170,12 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
             </div>
             <div>
               <h2 id="post-project-title" className="text-base font-bold text-text">
-                Post New Project
+                {selectedDeveloper ? `Commission ${selectedDeveloper.name}` : 'Post New Project'}
               </h2>
               <p className="text-xs text-text-muted">
-                Commission vetted freelance developers for verified deliveries
+                {selectedDeveloper
+                  ? `Assign milestone directly to ${selectedDeveloper.name} with verified escrow protection`
+                  : 'Commission vetted freelance developers for verified deliveries'}
               </p>
             </div>
           </div>
@@ -157,6 +194,43 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
           {error && (
             <div className="p-3 rounded-md bg-danger/10 border border-danger/30 text-danger text-xs font-medium">
               {error}
+            </div>
+          )}
+
+          {/* Assigned Developer Banner */}
+          {selectedDeveloper ? (
+            <div className="flex items-center justify-between p-3.5 rounded-lg bg-primary/10 border border-primary/30 text-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center text-xs">
+                  <UserCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-bold text-text">
+                      Assigning to: {selectedDeveloper.name}
+                    </span>
+                    <ShieldCheck className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <span className="text-text-muted text-[11px]">
+                    {selectedDeveloper.roleHeadline} • {selectedDeveloper.passRate}% Test Pass Rate
+                  </span>
+                </div>
+              </div>
+
+              {onClearDeveloper && (
+                <button
+                  type="button"
+                  onClick={onClearDeveloper}
+                  className="px-2 py-1 rounded bg-surface border border-border text-[11px] font-semibold text-text hover:text-primary hover:border-primary/50 transition-colors cursor-pointer"
+                >
+                  Switch to Open Bounty
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="p-2.5 rounded-md bg-surface-raised/40 border border-border/60 text-xs text-text-muted flex items-center justify-between">
+              <span>Posting as an Open Bounty to all vetted developers</span>
+              <span className="text-[11px] font-semibold text-primary">Open Pool</span>
             </div>
           )}
 
@@ -239,8 +313,8 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
                 onChange={(e) => setStatus(e.target.value as ProjectStatus)}
                 className="w-full px-3 py-2 rounded-md bg-surface-raised border border-border text-sm text-text focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary cursor-pointer"
               >
-                <option value="draft">Draft (Private)</option>
                 <option value="in_progress">Ready for Assignment</option>
+                <option value="draft">Draft (Private)</option>
               </select>
             </div>
           </div>
@@ -282,14 +356,19 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
               variant="primary"
               size="md"
               disabled={isSubmitting}
-              className="font-semibold"
+              className="font-semibold shadow-sm"
             >
               {isSubmitting ? (
                 'Posting...'
+              ) : selectedDeveloper ? (
+                <>
+                  <UserCheck className="w-4 h-4 mr-1.5" />
+                  Commission {selectedDeveloper.name.split(' ')[0]}
+                </>
               ) : (
                 <>
                   <Plus className="w-4 h-4 mr-1.5" />
-                  Post Project
+                  Post Open Project
                 </>
               )}
             </Button>
@@ -299,4 +378,3 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
     </div>
   );
 };
-
