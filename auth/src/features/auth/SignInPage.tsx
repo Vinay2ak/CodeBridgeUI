@@ -32,8 +32,11 @@ export function SignInPage({ bootstrap }: SignInPageProps) {
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  const routeAuthenticatedUser = (user: User) => {
-    redirectToDashboard(user.role);
+  const routeAuthenticatedUser = (
+    user: User,
+    auth?: { accessToken?: string; refreshToken?: string }
+  ) => {
+    redirectToDashboard(user.role, { user, ...auth });
   };
 
   useEffect(() => {
@@ -90,7 +93,7 @@ export function SignInPage({ bootstrap }: SignInPageProps) {
         createdAt: user.createdAt,
         onboardingCompleted: true,
       });
-      routeAuthenticatedUser(user);
+      routeAuthenticatedUser(user, { accessToken, refreshToken });
     } catch (err: any) {
       // If backend tunnel is unavailable or offline, allow seamless test login
       const isUnavailable =
@@ -131,7 +134,9 @@ export function SignInPage({ bootstrap }: SignInPageProps) {
           onboardingCompleted: true,
         });
 
-        routeAuthenticatedUser(fallbackUser);
+        routeAuthenticatedUser(fallbackUser, {
+          accessToken: "demo-token-" + fallbackUser.id,
+        });
         return;
       }
 

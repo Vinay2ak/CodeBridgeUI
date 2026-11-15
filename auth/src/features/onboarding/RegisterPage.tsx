@@ -100,7 +100,7 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
     }
 
     if (activeUser) {
-      redirectToDashboard(activeUser.role);
+      redirectToDashboard(activeUser.role, { user: activeUser });
       return;
     } else {
       setCurrentUser(null);
@@ -212,7 +212,7 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
       clearDraft();
       setSuccessRole("owner");
       redirectTimerRef.current = window.setTimeout(() => {
-        redirectToDashboard("owner");
+        redirectToDashboard("owner", { user: currentUser ?? undefined });
       }, 800);
     } catch (err) {
       const mapped = mapServerError(err);
@@ -237,7 +237,7 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
       clearDraft();
       setSuccessRole("freelancer");
       redirectTimerRef.current = window.setTimeout(() => {
-        redirectToDashboard("freelancer");
+        redirectToDashboard("freelancer", { user: currentUser ?? undefined });
       }, 800);
     } catch (err) {
       const mapped = mapServerError(err);

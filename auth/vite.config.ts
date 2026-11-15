@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
     env.VITE_API_URL ??
     process.env.VITE_GATEWAY_URL ??
     env.VITE_GATEWAY_URL ??
-    "https://itchy-weeks-travel.loca.lt"
+    "http://localhost:8000"
   )
     .trim()
     .replace(/\/$/, "");

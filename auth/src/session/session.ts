@@ -15,6 +15,12 @@ export function setSession(session: Session): void {
   _session = session;
   setAccessToken(session.accessToken);
   if (typeof window !== "undefined") {
+    if (session.accessToken) {
+      localStorage.setItem("cb_access_token", session.accessToken);
+      localStorage.setItem("cb_token", session.accessToken);
+      document.cookie = `cb_access_token=${encodeURIComponent(session.accessToken)}; path=/; max-age=604800; SameSite=Lax`;
+      document.cookie = `cb_token=${encodeURIComponent(session.accessToken)}; path=/; max-age=604800; SameSite=Lax`;
+    }
     if (session.refreshToken) {
       localStorage.setItem("cb_rt", session.refreshToken);
       localStorage.setItem("cb_refresh_token", session.refreshToken);
@@ -23,6 +29,11 @@ export function setSession(session: Session): void {
     }
     if (session.user) {
       localStorage.setItem("cb_user", JSON.stringify(session.user));
+      try {
+        const b64 = btoa(unescape(encodeURIComponent(JSON.stringify(session.user))));
+        document.cookie = `mock_rt=${encodeURIComponent(b64)}; path=/; max-age=604800; SameSite=Lax`;
+        document.cookie = `cb_user=${encodeURIComponent(JSON.stringify(session.user))}; path=/; max-age=604800; SameSite=Lax`;
+      } catch {}
     }
   }
 }
@@ -31,11 +42,12 @@ export function getSession(): Session | null {
   if (!_session && typeof window !== "undefined") {
     try {
       const savedUser = localStorage.getItem("cb_user");
+      const savedToken = localStorage.getItem("cb_access_token") || localStorage.getItem("cb_token") || "";
       const savedRt = localStorage.getItem("cb_refresh_token") || localStorage.getItem("cb_rt");
       if (savedUser) {
         _session = {
           user: JSON.parse(savedUser) as User,
-          accessToken: "",
+          accessToken: savedToken,
           refreshToken: savedRt || undefined,
         };
       }
@@ -50,9 +62,14 @@ export function clearSession(): void {
   _session = null;
   setAccessToken(null);
   if (typeof window !== "undefined") {
+    localStorage.removeItem("cb_access_token");
+    localStorage.removeItem("cb_token");
     localStorage.removeItem("cb_rt");
     localStorage.removeItem("cb_refresh_token");
     localStorage.removeItem("cb_user");
+    document.cookie = "cb_access_token=; path=/; max-age=0";
+    document.cookie = "cb_token=; path=/; max-age=0";
+    document.cookie = "cb_user=; path=/; max-age=0";
     document.cookie = "cb_rt=; path=/; max-age=0";
     document.cookie = "cb_refresh_token=; path=/; max-age=0";
     document.cookie = "mock_rt=; path=/; max-age=0";
