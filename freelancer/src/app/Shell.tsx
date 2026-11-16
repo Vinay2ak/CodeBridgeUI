@@ -1,5 +1,4 @@
-import React, { useState, useEffect, Suspense } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect } from "react";
 import {
   Code2,
   User as UserIcon,
@@ -7,33 +6,28 @@ import {
   LogOut,
   Keyboard,
   Wrench,
-  Briefcase,
+  Radio,
+  Server,
+  Award,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
-import { TaskSwitcher } from "../features/task/TaskSwitcher";
-import { TaskMarketplace } from "../features/task/TaskMarketplace";
-import { EscrowBar } from "../features/task/EscrowBar";
-import { TaskPanel } from "../features/task/TaskPanel";
-import { WorkspaceStatusCard } from "../features/task/WorkspaceStatusCard";
-import { WorkspaceCenter } from "../features/code/WorkspaceCenter";
-import { SubmissionPanel } from "../features/submission/SubmissionPanel";
-import { useFiles } from "../features/code/useFiles";
-import { workspaceApi } from "../services/workspace/api";
+import { TaskRadarView } from "../features/radar/TaskRadarView";
+import { ControlledWorkspaceView } from "../features/workspace/ControlledWorkspaceView";
+import { VerifiedPortfolioView } from "../features/portfolio/VerifiedPortfolioView";
 import { LivePill } from "../components/ui/LivePill";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { Menu, MenuItem } from "../components/ui/Menu";
 import { Chip } from "../components/ui/Chip";
-import { Tabs, TabItem } from "../components/ui/Tabs";
 import { Dialog } from "../components/ui/Dialog";
 import { Button } from "../components/ui/Button";
 import { ErrorBoundary } from "./ErrorBoundary";
-import { isRunStale } from "../features/submission/gate";
-import { submissionApi } from "../services/submission/api";
 
 const DevDrawer = React.lazy(() =>
   import("../components/dev/DevDrawer").then((m) => ({ default: m.DevDrawer }))
 );
+
+type ActiveView = "radar" | "workspace" | "portfolio";
 
 interface ShellProps {
   user: User;
@@ -48,38 +42,20 @@ export const Shell: React.FC<ShellProps> = ({
   onSelectTask,
   hasTasks,
 }) => {
-  const [mobileColumn, setMobileColumn] = useState<"task" | "code" | "run" | "status">("task");
+  void hasTasks;
+  const [activeView, setActiveView] = useState<ActiveView>("radar");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>(
+    currentTaskId || "proj_1024"
+  );
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [showMarketplace, setShowMarketplace] = useState(!hasTasks);
 
-  // If tasks become available or empty, adjust marketplace visibility
+  // Sync currentTaskId if provided
   useEffect(() => {
-    if (!hasTasks) {
-      setShowMarketplace(true);
+    if (currentTaskId) {
+      setSelectedProjectId(currentTaskId);
     }
-  }, [hasTasks]);
-
-  const activeId = hasTasks && !showMarketplace ? currentTaskId : null;
-  const filesState = useFiles(activeId || "");
-
-  const { data: wsData } = useQuery({
-    queryKey: ["workspace", activeId],
-    queryFn: () => workspaceApi.getWorkspace(activeId!),
-    enabled: Boolean(hasTasks && activeId),
-  });
-
-  const { data: subData } = useQuery({
-    queryKey: ["submission", "current", activeId],
-    queryFn: () => submissionApi.getCurrentSubmission(activeId!),
-    enabled: Boolean(hasTasks && activeId),
-  });
-
-  const workspaceStatus = wsData?.status || "stopped";
-  const isStale = isRunStale(
-    subData?.lastRun?.status === "completed" ? 1 : null,
-    filesState.lastSavedAt
-  );
+  }, [currentTaskId]);
 
   // Keyboard shortcut listener for Ctrl+Shift+D
   useEffect(() => {
@@ -94,12 +70,13 @@ export const Shell: React.FC<ShellProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const handleOpenWorkspace = (projectId: string) => {
+    setSelectedProjectId(projectId);
+    onSelectTask(projectId);
+    setActiveView("workspace");
+  };
+
   const userMenuItems: MenuItem[] = [
-    {
-      label: "Task Marketplace",
-      icon: <Briefcase className="h-4 w-4" aria-hidden="true" />,
-      onClick: () => setShowMarketplace(true),
-    },
     {
       label: "Account",
       icon: <Settings className="h-4 w-4" aria-hidden="true" />,
@@ -129,13 +106,6 @@ export const Shell: React.FC<ShellProps> = ({
     },
   ];
 
-  const mobileTabs: TabItem[] = [
-    { id: "task", label: "Task" },
-    { id: "code", label: "Code" },
-    { id: "run", label: "Run" },
-    { id: "status", label: "Status" },
-  ];
-
   return (
     <div className="min-h-screen flex flex-col bg-canvas text-ink">
       {/* Skip to Content */}
@@ -146,7 +116,7 @@ export const Shell: React.FC<ShellProps> = ({
         Skip to main content
       </a>
 
-      {/* Header */}
+      {/* Top Header Navbar */}
       <header className="h-14 border-b border-line bg-surface px-4 flex items-center justify-between gap-4 shrink-0 z-30">
         <div className="flex items-center gap-4 min-w-0">
           <div className="flex items-center gap-2 shrink-0">
@@ -158,34 +128,50 @@ export const Shell: React.FC<ShellProps> = ({
 
           <div className="h-4 w-px bg-line shrink-0 hidden sm:block" aria-hidden="true" />
 
-          <h1 className="text-sm font-semibold text-muted hidden md:block shrink-0">
-            Developer workspace
-          </h1>
+          {/* Core 3-View Navigation Switcher */}
+          <nav
+            aria-label="Core Freelancer Navigation"
+            className="flex items-center gap-1 bg-canvas p-1 rounded-lg border border-line"
+          >
+            <button
+              onClick={() => setActiveView("radar")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                activeView === "radar"
+                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              <Radio className="h-3.5 w-3.5" />
+              <span>Task Radar</span>
+            </button>
 
-          {hasTasks && (
-            <div className="flex items-center gap-2 min-w-0">
-              <TaskSwitcher
-                currentTaskId={currentTaskId}
-                onSelectTask={(id) => {
-                  onSelectTask(id);
-                  setShowMarketplace(false);
-                }}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setShowMarketplace((prev) => !prev)}
-                className="text-xs h-8 px-2.5 text-muted hover:text-ink shrink-0"
-              >
-                <Briefcase className="h-3.5 w-3.5" aria-hidden="true" />
-                <span className="hidden lg:inline">
-                  {showMarketplace ? "Active Workspace" : "Browse Tasks"}
-                </span>
-              </Button>
-            </div>
-          )}
+            <button
+              onClick={() => setActiveView("workspace")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                activeView === "workspace"
+                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              <Server className="h-3.5 w-3.5" />
+              <span>Controlled Workspace</span>
+            </button>
+
+            <button
+              onClick={() => setActiveView("portfolio")}
+              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+                activeView === "portfolio"
+                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  : "text-muted hover:text-ink"
+              }`}
+            >
+              <Award className="h-3.5 w-3.5" />
+              <span>Verified Portfolio</span>
+            </button>
+          </nav>
         </div>
 
+        {/* Right Section: Status Pill, Theme Toggle, Profile Menu */}
         <div className="flex items-center gap-2.5 shrink-0">
           <LivePill />
           <ThemeToggle />
@@ -210,130 +196,42 @@ export const Shell: React.FC<ShellProps> = ({
         </div>
       </header>
 
-      {/* Main Content Area */}
-      {!hasTasks || showMarketplace ? (
-        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-          <TaskMarketplace
-            onSelectTask={(taskId) => {
-              onSelectTask(taskId);
-              setShowMarketplace(false);
-            }}
-            hasExistingTasks={hasTasks}
-            onBack={hasTasks ? () => setShowMarketplace(false) : undefined}
-          />
-        </main>
-      ) : (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Escrow Bar */}
-          {currentTaskId && (
-            <ErrorBoundary fallbackTitle="Escrow Bar Error">
-              <EscrowBar taskId={currentTaskId} />
-            </ErrorBoundary>
-          )}
+      {/* Main View Display */}
+      <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        {activeView === "radar" && (
+          <ErrorBoundary fallbackTitle="Task Radar Error">
+            <TaskRadarView onOpenWorkspace={handleOpenWorkspace} />
+          </ErrorBoundary>
+        )}
 
-          {/* Mobile Column Navigation (< 1280px) */}
-          <div className="xl:hidden border-b border-line bg-surface p-2 flex justify-center shrink-0">
-            <Tabs
-              tabs={mobileTabs}
-              activeTab={mobileColumn}
-              onChange={(id) => setMobileColumn(id as "task" | "code" | "run" | "status")}
-              ariaLabel="Workspace column switcher"
+        {activeView === "workspace" && (
+          <ErrorBoundary fallbackTitle="Controlled Workspace Error">
+            <ControlledWorkspaceView
+              projectId={selectedProjectId}
+              onNavigateToPortfolio={() => setActiveView("portfolio")}
             />
-          </div>
+          </ErrorBoundary>
+        )}
 
-          {/* 3-Column Layout */}
-          <main id="main-content" className="flex-1 flex min-h-0 overflow-hidden">
-            {/* Left Column: TaskPanel (22rem) */}
-            <section
-              aria-label="Task Specification and Context"
-              className={`w-full xl:w-[22rem] shrink-0 h-full flex flex-col overflow-hidden ${
-                mobileColumn === "task" ? "flex" : "hidden xl:flex"
-              }`}
-            >
-              {currentTaskId && (
-                <ErrorBoundary fallbackTitle="Task Panel Error">
-                  <TaskPanel
-                    taskId={currentTaskId}
-                    onOpenFile={(path) => {
-                      filesState.openFile(path);
-                      setMobileColumn("code");
-                    }}
-                  />
-                </ErrorBoundary>
-              )}
-            </section>
-
-            {/* Center Column: Code Workspace + Dock */}
-            <section
-              aria-label="Code Workspace and Terminal"
-              className={`flex-1 h-full min-w-0 bg-canvas overflow-hidden ${
-                mobileColumn === "code" || mobileColumn === "run" ? "flex" : "hidden xl:flex"
-              } flex-col`}
-            >
-              {currentTaskId && (
-                <ErrorBoundary fallbackTitle="Code Workspace Error">
-                  <WorkspaceCenter
-                    taskId={currentTaskId}
-                    workspaceStatus={workspaceStatus}
-                    filesState={filesState}
-                    mobileView={mobileColumn === "run" ? "run" : "code"}
-                    onOpenMobileRun={() => setMobileColumn("run")}
-                  />
-                </ErrorBoundary>
-              )}
-            </section>
-
-            {/* Right Column: Workspace Status Card & Submission Panel (21rem) */}
-            <section
-              aria-label="Workspace Runtime and Submission"
-              className={`w-full xl:w-[21rem] shrink-0 h-full border-l border-line bg-surface p-4 overflow-y-auto space-y-4 ${
-                mobileColumn === "status" ? "block" : "hidden xl:block"
-              }`}
-            >
-              {currentTaskId && (
-                <>
-                  <ErrorBoundary fallbackTitle="Workspace Status Error">
-                    <WorkspaceStatusCard taskId={currentTaskId} />
-                  </ErrorBoundary>
-                  <ErrorBoundary fallbackTitle="Submission Panel Error">
-                    <SubmissionPanel
-                      taskId={currentTaskId}
-                      workspaceStatus={workspaceStatus}
-                      changedCount={filesState.changedFiles.length}
-                      isStale={isStale}
-                    />
-                  </ErrorBoundary>
-                </>
-              )}
-            </section>
-          </main>
-        </div>
-      )}
+        {activeView === "portfolio" && (
+          <ErrorBoundary fallbackTitle="Verified Portfolio Error">
+            <VerifiedPortfolioView />
+          </ErrorBoundary>
+        )}
+      </main>
 
       {/* Keyboard Shortcuts Dialog */}
       <Dialog
         open={shortcutsOpen}
         onClose={() => setShortcutsOpen(false)}
         title="Keyboard Shortcuts"
-        description="Global and local workspace keyboard combinations for rapid engineering."
+        description="Global workspace keyboard combinations for rapid engineering."
       >
         <div className="space-y-3 font-mono text-xs my-4">
           <div className="flex items-center justify-between p-2 rounded bg-raised border border-line">
-            <span className="text-muted">Save active file in editor</span>
-            <kbd className="px-2 py-0.5 rounded bg-surface border border-line font-bold text-primary">
-              Ctrl + S
-            </kbd>
-          </div>
-          <div className="flex items-center justify-between p-2 rounded bg-raised border border-line">
-            <span className="text-muted">Trigger test verification run</span>
+            <span className="text-muted">Run project checks</span>
             <kbd className="px-2 py-0.5 rounded bg-surface border border-line font-bold text-primary">
               Ctrl + Enter
-            </kbd>
-          </div>
-          <div className="flex items-center justify-between p-2 rounded bg-raised border border-line">
-            <span className="text-muted">Focus workspace terminal</span>
-            <kbd className="px-2 py-0.5 rounded bg-surface border border-line font-bold text-primary">
-              Ctrl + `
             </kbd>
           </div>
           <div className="flex items-center justify-between p-2 rounded bg-raised border border-line">
@@ -350,17 +248,15 @@ export const Shell: React.FC<ShellProps> = ({
         </div>
       </Dialog>
 
-      {/* Developer Diagnostics Drawer */}
+      {/* Dev Diagnostics Drawer (Ctrl+Shift+D) */}
       {env.devTools && devDrawerOpen && (
-        <ErrorBoundary fallbackTitle="Dev Drawer Error">
-          <Suspense fallback={null}>
-            <DevDrawer
-              open={devDrawerOpen}
-              onClose={() => setDevDrawerOpen(false)}
-              taskId={activeId || ""}
-            />
-          </Suspense>
-        </ErrorBoundary>
+        <React.Suspense fallback={null}>
+          <DevDrawer
+            open={devDrawerOpen}
+            onClose={() => setDevDrawerOpen(false)}
+            taskId={selectedProjectId}
+          />
+        </React.Suspense>
       )}
     </div>
   );
