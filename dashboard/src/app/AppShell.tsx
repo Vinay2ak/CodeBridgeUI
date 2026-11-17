@@ -14,7 +14,6 @@ import { env } from '../lib/env';
 import { Chip } from '../components/ui/Chip';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { Menu } from '../components/ui/Menu';
-import { LivePill } from '../components/dashboard/LivePill';
 import { NotificationBell } from '../components/dashboard/NotificationBell';
 
 interface AppShellProps {
@@ -235,7 +234,6 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2.5 sm:gap-3.5">
-            <LivePill />
             <NotificationBell />
             <ThemeToggle />
 
