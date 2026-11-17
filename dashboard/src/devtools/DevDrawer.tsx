@@ -19,6 +19,8 @@ import {
   expireToken,
   setSuspended,
   setServiceFailing,
+  setFailMatching,
+  setMatchingDelay,
   emitTestEvent,
   dropConnection,
   subscribeMockControls,
@@ -127,7 +129,7 @@ export const DevDrawer: React.FC = () => {
     );
   }
 
-  const servicesList = ['project', 'payment', 'workspace', 'admin', 'notification'];
+  const servicesList = ['project', 'talent', 'payment', 'workspace', 'admin', 'notification'];
 
   return (
     <div
@@ -260,6 +262,38 @@ export const DevDrawer: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* Matching Specific Simulation */}
+              <div className="p-3 rounded-md bg-surface-raised/50 border border-border space-y-2.5 pt-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium">Fail Talent Matching</span>
+                  <button
+                    type="button"
+                    onClick={() => setFailMatching(!mockState.failMatching)}
+                    className={`px-2.5 py-1 text-xs rounded font-medium transition-colors cursor-pointer border ${
+                      mockState.failMatching
+                        ? 'bg-danger text-on-primary border-danger'
+                        : 'bg-surface text-text-muted border-border hover:text-text'
+                    }`}
+                  >
+                    {mockState.failMatching ? 'Failing (status: failed)' : 'Normal'}
+                  </button>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <label htmlFor="matching-delay-input" className="text-xs text-text-muted">
+                    Matching Delay (ms)
+                  </label>
+                  <input
+                    id="matching-delay-input"
+                    type="number"
+                    min="0"
+                    step="500"
+                    value={mockState.matchingDelayMs}
+                    onChange={(e) => setMatchingDelay(Number(e.target.value) || 0)}
+                    className="w-24 px-2 py-1 text-xs rounded bg-surface border border-border text-right font-mono text-text"
+                  />
+                </div>
+              </div>
             </section>
           )}
 
@@ -287,6 +321,7 @@ export const DevDrawer: React.FC = () => {
                     onChange={(e) => setSelectedEventType(e.target.value)}
                     className="flex-1 text-xs rounded-md bg-surface border border-border px-3 py-1.5 text-text focus-visible:outline-2 focus-visible:outline-primary"
                   >
+                    <option value="project.posted">project.posted</option>
                     <option value="user.registered">user.registered</option>
                     <option value="project.status_changed">project.status_changed</option>
                     <option value="payment.held">payment.held</option>

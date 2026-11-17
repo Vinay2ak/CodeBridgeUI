@@ -3,6 +3,10 @@ import { formatMoney } from '../lib/format';
 
 export function formatEventSentence(event: CbEvent): string {
   switch (event.type) {
+    case 'project.posted': {
+      const data = event.data as any;
+      return `New project posted: ${data.title} (${formatMoney(data.budget || 0)})`;
+    }
     case 'user.registered': {
       const data = event.data as UserRegisteredData;
       return `New ${data.role} joined: ${data.displayName}`;

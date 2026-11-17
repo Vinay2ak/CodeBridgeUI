@@ -70,3 +70,141 @@ This contract defines the protocols, boundaries, and shared conventions for Code
 - Global sign-out broadcasts `{"type": "logout"}` over a `BroadcastChannel` named `"cb-auth"`.
 - Every dashboard tab listening on `"cb-auth"` that receives this message clears its in-memory session state and navigates immediately to `VITE_SIGNIN_URL`.
 
+
+
+## 7. Project Posting, Matching & Talent Contract
+
+All endpoints run under `/api/v1` with Bearer token authentication, camelCase JSON payloads, and money in INR (Indian Rupee).
+
+### Project Service Endpoints
+
+#### `POST /projects`
+- **Headers:** `Idempotency-Key: <uuid>` (required for safe retries)
+- **Request Body:**
+  ```json
+  {
+    "title": "string (10-80 chars)",
+    "description": "string (40-1500 chars)",
+    "blockerType": "HARD_BUG | UNFINISHED_FEATURE | MISSING_INTEGRATION | TEST_CI_FAILURE",
+    "stacks": ["PYTHON_FASTAPI", "REACT_TS", "POSTGRES_SQL", "..."],
+    "specialties": ["AUTH_RBAC", "PAYMENT_WEBHOOKS", "DB_MIGRATIONS", "..."],
+    "skills": ["string (2-24 chars, unique)"],
+    "budget": 5000,
+    "urgency": "ASAP | THIS_WEEK | FLEXIBLE",
+    "repoUrl": "https://github.com/owner/repo (optional)",
+    "verificationMode": "AUTO_TESTS_AND_REVIEW | MANUAL_REVIEW_ONLY"
+  }
+  ```
+- **Responses:**
+  - `201 Created`: Returns `ProjectDetail` with status `open`, `size` derived from budget, and `matchingStatus: "computing"`.
+  - `422 Unprocessable Entity`: Validation failed with field errors array.
+  - `503 Service Unavailable`: Project service degraded.
+
+#### `GET /projects/{id}`
+- **Responses:**
+  - `200 OK`: `ProjectDetail`
+  - `403 Forbidden`: `{"type": "about:blank", "title": "Forbidden", "status": 403, "code": "FORBIDDEN"}`
+  - `404 Not Found`: `{"type": "about:blank", "title": "Project Not Found", "status": 404, "code": "NOT_FOUND"}`
+
+#### `GET /projects`
+- **Responses:**
+  - `200 OK`: `{ "items": Project[] }` containing posted projects first (sorted newest first), followed by active/historical projects.
+
+#### `PUT /projects/{id}/shortlist/{freelancerId}`
+- **Responses:**
+  - `204 No Content`: Developer added to project shortlist.
+
+#### `DELETE /projects/{id}/shortlist/{freelancerId}`
+- **Responses:**
+  - `204 No Content`: Developer removed from project shortlist.
+
+---
+
+### Talent Service Endpoints
+
+#### `GET /talent/matches/{projectId}`
+- **Responses:**
+  - `200 OK`:
+    ```json
+    {
+      "status": "computing | ready | failed",
+      "computedAt": "string (ISO8601) | null",
+      "totalCandidates": 12,
+      "items": [
+        {
+          "freelancer": {
+            "id": "f-1",
+            "displayName": "Aarav Patel",
+            "headline": "FastAPI & Python backend developer",
+            "experience": "MID_LEVEL",
+            "availability": "IMMEDIATE",
+            "minBudget": 3000,
+            "githubVerified": true,
+            "verifiedWorkCount": 4,
+            "rating": 4.9,
+            "supportedStacks": ["PYTHON_FASTAPI"],
+            "debuggingSpecialties": ["PAYMENT_WEBHOOKS", "TESTING"],
+            "skills": ["Python", "FastAPI"],
+            "isNew": false
+          },
+          "score": 92,
+          "label": "excellent",
+          "breakdown": {
+            "stack": { "points": 30, "max": 30 },
+            "specialty": { "points": 20, "max": 20 },
+            "skills": { "points": 15, "max": 15 },
+            "budget": { "points": 10, "max": 10 },
+            "availability": { "points": 10, "max": 10 },
+            "experience": { "points": 10, "max": 10 },
+            "trust": { "points": 5, "max": 5 }
+          },
+          "reasons": [
+            "Matches all primary stacks: Python / FastAPI",
+            "Specializes in Payment / webhook callbacks",
+            "Fits your budget",
+            "Available now",
+            "GitHub verified"
+          ],
+          "warnings": [],
+          "shortlisted": false
+        }
+      ]
+    }
+    ```
+  - `403 Forbidden`: `{"code": "FORBIDDEN"}`
+  - `404 Not Found`: `{"code": "NOT_FOUND"}`
+  - `503 Service Unavailable`: `{"code": "SERVICE_UNAVAILABLE"}`
+
+#### `GET /talent/freelancers/{id}`
+- **Responses:**
+  - `200 OK`: `FreelancerProfile` (includes `bio`, `githubUsername`, `portfolioUrl`, `memberSince`)
+  - `404 Not Found`: Developer not found.
+
+---
+
+### Identity Service Endpoints
+
+#### `GET /users/me/owner-profile`
+- **Responses:**
+  - `200 OK`: `OwnerProfile` (primary stacks, typical blocker, budget range, preferred verification mode)
+  - `404 Not Found`: No owner profile saved.
+
+---
+
+### Realtime Events
+- **`project.posted`**:
+  - `occurredAt`: ISO8601 timestamp
+  - `source`: `"project-service"`
+  - `data`: `{ "projectId": "string", "title": "string", "budget": 5000 }`
+  - Authorized Roles: `owner`, `admin`
+
+---
+
+## 8. Analytics (Grafana embed)
+- Grafana runs on the backend machine at port 3001.
+- Dashboard UID: `codebridge-analytics`, path: `/d/codebridge-analytics/codebridge-platform-analytics`, orgId: 1.
+- Embedding and anonymous viewing are enabled on Grafana (`GF_SECURITY_ALLOW_EMBEDDING=true` and `GF_AUTH_ANONYMOUS_ENABLED=true`), so the embedded iframe requires no authentication prompts and no extra headers.
+- Full dashboard URL configured via environment variable `VITE_GRAFANA_URL` (format: `http://<backend-host>:3001/d/codebridge-analytics/codebridge-platform-analytics?orgId=1&kiosk`).
+- The application never hardcodes any host, IP, or port in source code. When `VITE_GRAFANA_URL` is omitted or empty, the Analytics page displays a neutral "not configured" guidance state.
+- Range (`from=now-<range>&to=now`), auto-refresh (`refresh=<value>`), and theme (`theme=dark|light`) query parameters are dynamically managed by the client adapter.
+

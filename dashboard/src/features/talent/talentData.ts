@@ -19,7 +19,7 @@ export const curatedDevelopers: DeveloperProfile[] = [
     github: {
       handle: 'alexchen-dev',
       commitsThisMonth: 142,
-      prAcceptanceRate: 99.4,
+      prAcceptanceRate: 99.5,
       repoDoctorScore: 99,
     },
     testHistory: {

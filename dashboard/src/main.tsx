@@ -66,9 +66,36 @@ if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === 'true') {
 }
 
 async function bootstrap() {
-  if (env.VITE_USE_MOCKS) {
+  const isFullMock = env.VITE_USE_MOCKS;
+  const mockServices = env.VITE_MOCK_SERVICES;
+  const isSelectiveMock = !isFullMock && mockServices.length > 0;
+
+  // Print active mode and mocked services once in development console group [CodeBridge env]
+  if (import.meta.env.DEV) {
+    console.group('[CodeBridge env]');
+    console.log(
+      'Mode:',
+      isFullMock ? 'full-mock' : isSelectiveMock ? 'selective-mock' : 'real-backend'
+    );
+    console.log(
+      'Mocked services:',
+      isFullMock
+        ? 'all'
+        : isSelectiveMock
+        ? mockServices.join(', ')
+        : 'none'
+    );
+    console.log('Gateway URL:', env.VITE_GATEWAY_URL);
+    console.log('GitHub Mode:', env.VITE_GITHUB_MODE);
+    console.groupEnd();
+  }
+
+  if (isFullMock) {
     const { startWorker } = await import('./mocks/browser');
     await startWorker();
+  } else if (isSelectiveMock) {
+    const { startWorker } = await import('./mocks/browser');
+    await startWorker(mockServices);
   }
 
   const rootElement = document.getElementById('root');

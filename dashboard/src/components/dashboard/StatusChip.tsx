@@ -35,6 +35,11 @@ export const StatusChip: React.FC<StatusChipProps> = ({
 
   if (category === 'project') {
     switch (status) {
+      case 'open':
+        icon = <CircleDot className="w-3.5 h-3.5" />;
+        label = 'Open';
+        tone = 'primary';
+        break;
       case 'draft':
         icon = <FilePen className="w-3.5 h-3.5" />;
         label = 'Draft';

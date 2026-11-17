@@ -6,6 +6,12 @@ export interface UserRegisteredData {
   displayName: string;
 }
 
+export interface ProjectPostedData {
+  projectId: string;
+  title: string;
+  budget: number;
+}
+
 export interface ProjectStatusChangedData {
   projectId: string;
   title: string;
@@ -37,6 +43,7 @@ export interface ServiceDegradedData {
 }
 
 export type CbEventData =
+  | ProjectPostedData
   | UserRegisteredData
   | ProjectStatusChangedData
   | PaymentHeldData
@@ -48,6 +55,7 @@ export type CbEventData =
 export interface CbEvent<T = CbEventData> {
   id: string;
   type:
+    | 'project.posted'
     | 'user.registered'
     | 'project.status_changed'
     | 'payment.held'

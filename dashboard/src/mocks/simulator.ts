@@ -3,6 +3,8 @@ import { initialProjects } from './data';
 
 export function roleCanSeeEvent(role: UserRole, eventType: string): boolean {
   switch (eventType) {
+    case 'project.posted':
+      return role === 'owner' || role === 'admin';
     case 'user.registered':
       return role === 'admin';
     case 'project.status_changed':

@@ -1,5 +1,5 @@
 import { http, HttpResponse } from 'msw';
-import { mockState, isServiceFailing } from './controls';
+import { mockState, isServiceFailing, emitTestEvent } from './controls';
 import {
   initialProjects,
   getPaymentsSummary,
@@ -8,8 +8,13 @@ import {
   initialServicesHealth,
   initialNotifications,
 } from './data';
+import { mockFreelancers } from './data/freelancers';
+import { rankFreelancers } from './matching';
+import { postProjectSchema } from '../features/post-project/schema';
+import { sizeFromBudget } from '../features/post-project/size';
 import { roleCanSeeEvent } from './simulator';
 import { UserRole } from '../realtime/types';
+import type { ProjectDetail } from '../services/project/types';
 
 function generateCorrelationId(): string {
   return `corr-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
@@ -154,12 +159,94 @@ function validateAuthHeader(
 }
 
 // Random delay between 300ms and 800ms
-async function applyRandomLatency() {
-  const ms = Math.floor(Math.random() * (800 - 300 + 1)) + 300;
+async function applyRandomLatency(extraDelay = 0) {
+  const ms = Math.floor(Math.random() * (800 - 300 + 1)) + 300 + extraDelay;
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export const handlers = [
+// ---------------- Persistence & Storage Helpers ----------------
+const PROJECTS_KEY = 'mock.projects.v1';
+const SHORTLISTS_KEY = 'mock.shortlists.v1';
+const IDEMPOTENCY_KEY = 'mock.idempotency.v1';
+
+function getStoredProjects(): ProjectDetail[] {
+  if (typeof sessionStorage === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(PROJECTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredProjects(projects: ProjectDetail[]): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  } catch {}
+}
+
+function getStoredShortlists(): Record<string, string[]> {
+  if (typeof sessionStorage === 'undefined') return {};
+  try {
+    const raw = sessionStorage.getItem(SHORTLISTS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredShortlists(map: Record<string, string[]>): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(SHORTLISTS_KEY, JSON.stringify(map));
+  } catch {}
+}
+
+function getIdempotencyRecord(key: string): ProjectDetail | null {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${IDEMPOTENCY_KEY}.${key}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function setIdempotencyRecord(key: string, project: ProjectDetail): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(`${IDEMPOTENCY_KEY}.${key}`, JSON.stringify(project));
+  } catch {}
+}
+
+const matchPollCounts = new Map<string, number>();
+
+function toProjectDetail(p: any): ProjectDetail {
+  return {
+    id: p.id,
+    title: p.title,
+    description: p.description || 'Production issue requiring expert debugging and verification.',
+    blockerType: p.blockerType || 'HARD_BUG',
+    stacks: p.stacks || ['PYTHON_FASTAPI'],
+    specialties: p.specialties || ['PAYMENT_WEBHOOKS', 'TESTING'],
+    skills: p.skills || ['Python', 'FastAPI'],
+    budget: p.budget || 5000,
+    urgency: p.urgency || 'THIS_WEEK',
+    size: p.size || sizeFromBudget(p.budget || 5000).value,
+    repoUrl: p.repoUrl || (p.repo ? `https://github.com/${p.repo}` : null),
+    verificationMode: p.verificationMode || 'AUTO_TESTS_AND_REVIEW',
+    createdAt: p.createdAt || p.updatedAt || new Date().toISOString(),
+    matchingStatus: p.matchingStatus || 'ready',
+    status: p.status || 'open',
+    repo: p.repo || 'acme/repo',
+    freelancerName: p.freelancerName || null,
+    updatedAt: p.updatedAt || new Date().toISOString(),
+    tags: p.tags,
+  };
+}
+
+export const identityHandlers = [
   // 1. Identity: POST /auth/refresh
   http.post('*/api/v1/auth/refresh', async () => {
     await applyRandomLatency();
@@ -257,6 +344,46 @@ export const handlers = [
     });
   }),
 
+  // 3b. Identity: GET /users/me/owner-profile
+  http.get('*/api/v1/users/me/owner-profile', async ({ request }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const mockUser = getMockCookie();
+    if (!mockUser || mockUser.role !== 'owner') {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Not Found',
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: 'Owner profile not found',
+          correlationId: corrId,
+        },
+        { status: 404, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    return HttpResponse.json(
+      {
+        ownerType: 'STARTUP_TEAM',
+        organizationName: 'CodeBridge Tech Labs',
+        roleTitle: 'Engineering Lead',
+        timezone: 'Asia/Kolkata',
+        primaryStack: ['PYTHON_FASTAPI', 'REACT_TS'],
+        typicalBlocker: 'HARD_BUG',
+        defaultBudgetRange: 'FEATURE_INTEGRATION',
+        preferredVerificationMode: 'AUTO_TESTS_AND_REVIEW',
+      },
+      { headers: { 'X-Correlation-Id': corrId } }
+    );
+  })
+];
+
+export const projectHandlers = [
   // 4. Project: GET /projects
   http.get('*/api/v1/projects', async ({ request }) => {
     await applyRandomLatency();
@@ -293,13 +420,81 @@ export const handlers = [
     const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
     if (!auth.isValid) return auth.errorResponse!;
 
+    const stored = getStoredProjects();
+    const combined = [...stored, ...initialProjects.map(toProjectDetail)];
+
     return HttpResponse.json(
-      { items: initialProjects },
+      { items: combined },
       { headers: { 'X-Correlation-Id': corrId } }
     );
   }),
 
-  // Project: POST /projects (Post a Project by Owner)
+  // 4b. Project: GET /projects/:id
+  http.get('*/api/v1/projects/:id', async ({ request, params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+
+    if (isServiceFailing('project')) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Service Unavailable',
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          detail: 'Project service is currently unavailable',
+          correlationId: corrId,
+        },
+        { status: 503, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const id = String(params.id);
+    if (id === 'p-other-owner' || id === 'p-forbidden') {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Forbidden',
+          status: 403,
+          code: 'FORBIDDEN',
+          detail: 'You do not have access to this project',
+          correlationId: corrId,
+        },
+        { status: 403, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const stored = getStoredProjects();
+    const foundStored = stored.find((p) => p.id === id);
+    if (foundStored) {
+      return HttpResponse.json(foundStored, {
+        headers: { 'X-Correlation-Id': corrId },
+      });
+    }
+
+    const foundInitial = initialProjects.find((p) => p.id === id);
+    if (foundInitial) {
+      return HttpResponse.json(toProjectDetail(foundInitial), {
+        headers: { 'X-Correlation-Id': corrId },
+      });
+    }
+
+    return HttpResponse.json(
+      {
+        type: 'about:blank',
+        title: 'Project Not Found',
+        status: 404,
+        code: 'NOT_FOUND',
+        detail: `Project with id ${id} not found`,
+        correlationId: corrId,
+      },
+      { status: 404, headers: { 'X-Correlation-Id': corrId } }
+    );
+  }),
+
+  // 4c. Project: POST /projects (Post a Project by Owner)
   http.post('*/api/v1/projects', async ({ request }) => {
     await applyRandomLatency();
     const corrId = generateCorrelationId();
@@ -335,6 +530,18 @@ export const handlers = [
     const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
     if (!auth.isValid) return auth.errorResponse!;
 
+    // Check Idempotency-Key
+    const idempotencyKey = request.headers.get('Idempotency-Key');
+    if (idempotencyKey) {
+      const existing = getIdempotencyRecord(idempotencyKey);
+      if (existing) {
+        return HttpResponse.json(existing, {
+          status: 201,
+          headers: { 'X-Correlation-Id': corrId, 'Idempotency-Key': idempotencyKey },
+        });
+      }
+    }
+
     let body: any = {};
     try {
       body = await request.json();
@@ -342,24 +549,305 @@ export const handlers = [
       body = {};
     }
 
-    const newProject = {
-      id: `proj-${Date.now()}`,
-      title: body.title || 'Untitled Project',
-      repo: body.repo || 'acme/new-service',
+    // Validate with Zod postProjectSchema
+    const parseResult = postProjectSchema.safeParse(body);
+    if (!parseResult.success) {
+      const errors = parseResult.error.errors.map((e) => ({
+        field: String(e.path[0] ?? ''),
+        message: e.message,
+      }));
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Validation Failed',
+          status: 422,
+          code: 'VALIDATION_FAILED',
+          detail: 'The submitted project details are invalid.',
+          correlationId: corrId,
+          errors,
+        },
+        { status: 422, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const data = parseResult.data;
+    const stored = getStoredProjects();
+    const projectId = `p-${Date.now()}`;
+    const now = new Date().toISOString();
+
+    const repoSlug = data.repoUrl
+      ? data.repoUrl.replace(/^https?:\/\/github\.com\//i, '').replace(/\/$/, '')
+      : 'acme/service';
+
+    const newProject: ProjectDetail = {
+      id: projectId,
+      title: data.title,
+      description: data.description,
+      blockerType: data.blockerType,
+      stacks: data.stacks,
+      specialties: data.specialties,
+      skills: data.skills,
+      budget: data.budget,
+      urgency: data.urgency,
+      size: sizeFromBudget(data.budget).value,
+      repoUrl: data.repoUrl || null,
+      verificationMode: data.verificationMode,
+      createdAt: now,
+      updatedAt: now,
+      matchingStatus: 'computing',
+      status: 'open',
+      repo: repoSlug,
       freelancerName: null,
-      status: body.status || 'draft',
-      budget: Number(body.budget) || 500,
-      updatedAt: new Date().toISOString(),
     };
 
-    initialProjects.unshift(newProject as any);
+    stored.unshift(newProject);
+    saveStoredProjects(stored);
+
+    if (idempotencyKey) {
+      setIdempotencyRecord(idempotencyKey, newProject);
+    }
+
+    // Emit event
+    emitTestEvent('project.posted', {
+      projectId: newProject.id,
+      title: newProject.title,
+      budget: newProject.budget,
+    });
 
     return HttpResponse.json(newProject, {
       status: 201,
+      headers: {
+        'X-Correlation-Id': corrId,
+        ...(idempotencyKey ? { 'Idempotency-Key': idempotencyKey } : {}),
+      },
+    });
+  })
+];
+
+export const talentHandlers = [
+  // 4d. Talent: GET /talent/matches/:projectId
+  http.get('*/api/v1/talent/matches/:projectId', async ({ request, params }) => {
+    await applyRandomLatency(mockState.matchingDelayMs);
+    const corrId = generateCorrelationId();
+
+    if (isServiceFailing('talent')) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Service Unavailable',
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          detail: 'Talent matching service is currently unavailable',
+          correlationId: corrId,
+        },
+        { status: 503, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const projectId = String(params.projectId);
+    if (projectId === 'p-other-owner' || projectId === 'p-forbidden') {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Forbidden',
+          status: 403,
+          code: 'FORBIDDEN',
+          detail: 'You do not have access to this project',
+          correlationId: corrId,
+        },
+        { status: 403, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const stored = getStoredProjects();
+    const project =
+      stored.find((p) => p.id === projectId) ||
+      initialProjects.map(toProjectDetail).find((p) => p.id === projectId);
+
+    if (!project) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Project Not Found',
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: `Project with id ${projectId} not found`,
+          correlationId: corrId,
+        },
+        { status: 404, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    if (mockState.failMatching) {
+      return HttpResponse.json(
+        {
+          status: 'failed',
+          computedAt: null,
+          totalCandidates: 0,
+          items: [],
+        },
+        { headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    // Polling simulation: first 2 requests respond with 'computing', 3rd responds with 'ready'
+    const count = matchPollCounts.get(projectId) ?? 0;
+    matchPollCounts.set(projectId, count + 1);
+
+    if (count < 2) {
+      return HttpResponse.json(
+        {
+          status: 'computing',
+          computedAt: null,
+          totalCandidates: 0,
+          items: [],
+        },
+        { headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const shortlists = getStoredShortlists();
+    const shortlistedSet = new Set(shortlists[projectId] ?? []);
+    const items = rankFreelancers(project, mockFreelancers, shortlistedSet);
+
+    return HttpResponse.json(
+      {
+        status: 'ready',
+        computedAt: new Date().toISOString(),
+        totalCandidates: mockFreelancers.length,
+        items,
+      },
+      { headers: { 'X-Correlation-Id': corrId } }
+    );
+  }),
+
+  // 4e. Talent: GET /talent/freelancers/:id
+  http.get('*/api/v1/talent/freelancers/:id', async ({ request, params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+
+    if (isServiceFailing('talent')) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Service Unavailable',
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          detail: 'Talent service is currently unavailable',
+          correlationId: corrId,
+        },
+        { status: 503, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const id = String(params.id);
+    const freelancer = mockFreelancers.find((f) => f.id === id);
+    if (!freelancer) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Freelancer Not Found',
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: `Freelancer ${id} not found`,
+          correlationId: corrId,
+        },
+        { status: 404, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    return HttpResponse.json(freelancer, {
       headers: { 'X-Correlation-Id': corrId },
     });
   }),
 
+  // 4f. Shortlist: PUT /projects/:projectId/shortlist/:freelancerId
+  http.put('*/api/v1/projects/:projectId/shortlist/:freelancerId', async ({ request, params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const projectId = String(params.projectId);
+    const freelancerId = String(params.freelancerId);
+
+    const map = getStoredShortlists();
+    const list = new Set(map[projectId] ?? []);
+    list.add(freelancerId);
+    map[projectId] = Array.from(list);
+    saveStoredShortlists(map);
+
+    return new HttpResponse(null, {
+      status: 204,
+      headers: { 'X-Correlation-Id': corrId },
+    });
+  }),
+
+  // 4g. Shortlist: DELETE /projects/:projectId/shortlist/:freelancerId
+  http.delete('*/api/v1/projects/:projectId/shortlist/:freelancerId', async ({ request, params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    const projectId = String(params.projectId);
+    const freelancerId = String(params.freelancerId);
+
+    const map = getStoredShortlists();
+    if (map[projectId]) {
+      map[projectId] = map[projectId].filter((id) => id !== freelancerId);
+      saveStoredShortlists(map);
+    }
+
+    return new HttpResponse(null, {
+      status: 204,
+      headers: { 'X-Correlation-Id': corrId },
+    });
+  }),
+  // Identity Service alias for freelancer profile
+  http.get('*/api/v1/freelancers/:id', async ({ params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+    const freelancerId = String(params.id);
+    const freelancer = mockFreelancers.find((f) => f.id === freelancerId);
+
+    if (!freelancer) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Not Found',
+          status: 404,
+          code: 'NOT_FOUND',
+          detail: 'Freelancer not found',
+          correlationId: corrId,
+        },
+        { status: 404, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    return HttpResponse.json(
+      {
+        id: freelancer.id,
+        full_name: freelancer.displayName,
+        bio: freelancer.headline,
+        skills: freelancer.skills,
+        experience_years: 5,
+        availability: freelancer.availability === 'IMMEDIATE' ? 'AVAILABLE' : 'BUSY',
+      },
+      { headers: { 'X-Correlation-Id': corrId } }
+    );
+  }),
+];
+
+export const paymentHandlers = [
   // 5. Payment: GET /payments/summary
   http.get('*/api/v1/payments/summary', async ({ request }) => {
     await applyRandomLatency();
@@ -400,7 +888,34 @@ export const handlers = [
       headers: { 'X-Correlation-Id': corrId },
     });
   }),
+  http.get('*/api/v1/payment/summary', async ({ request }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
 
+    if (isServiceFailing('payment')) {
+      return HttpResponse.json(
+        {
+          type: 'about:blank',
+          title: 'Service Unavailable',
+          status: 503,
+          code: 'SERVICE_UNAVAILABLE',
+          detail: 'Payment service is currently unavailable',
+          correlationId: corrId,
+        },
+        { status: 503, headers: { 'X-Correlation-Id': corrId } }
+      );
+    }
+
+    const auth = validateAuthHeader(request.headers.get('Authorization'), corrId);
+    if (!auth.isValid) return auth.errorResponse!;
+
+    return HttpResponse.json(getPaymentsSummary(), {
+      headers: { 'X-Correlation-Id': corrId },
+    });
+  }),
+];
+
+export const workspaceHandlers = [
   // 6. Workspace: GET /tasks/mine (freelancer only)
   http.get('*/api/v1/tasks/mine', async ({ request }) => {
     await applyRandomLatency();
@@ -455,8 +970,10 @@ export const handlers = [
       { items: initialTasks },
       { headers: { 'X-Correlation-Id': corrId } }
     );
-  }),
+  })
+];
 
+export const adminHandlers = [
   // 7. Admin: GET /admin/users (admin only)
   http.get('*/api/v1/admin/users', async ({ request }) => {
     await applyRandomLatency();
@@ -500,7 +1017,7 @@ export const handlers = [
           title: 'Forbidden',
           status: 403,
           code: 'FORBIDDEN',
-          detail: 'Admin endpoint forbidden for non-admin users',
+          detail: 'Admin user list forbidden for non-admin users',
           correlationId: corrId,
         },
         { status: 403, headers: { 'X-Correlation-Id': corrId } }
@@ -508,16 +1025,13 @@ export const handlers = [
     }
 
     return HttpResponse.json(
-      {
-        total: 128,
-        items: initialAdminUsers,
-      },
+      { items: initialAdminUsers },
       { headers: { 'X-Correlation-Id': corrId } }
     );
   }),
 
-  // 8. Admin: GET /admin/health (admin only)
-  http.get('*/api/v1/admin/health', async ({ request }) => {
+  // 8. Admin: GET /admin/services/health (admin only)
+  http.get('*/api/v1/admin/services/health', async ({ request }) => {
     await applyRandomLatency();
     const corrId = generateCorrelationId();
 
@@ -578,8 +1092,10 @@ export const handlers = [
       { services: healthRows },
       { headers: { 'X-Correlation-Id': corrId } }
     );
-  }),
+  })
+];
 
+export const notificationHandlers = [
   // 9. Notification: GET /notifications
   http.get('*/api/v1/notifications', async ({ request }) => {
     await applyRandomLatency();
@@ -625,6 +1141,25 @@ export const handlers = [
       { items: filtered },
       { headers: { 'X-Correlation-Id': corrId } }
     );
-  }),
+  })
 ];
 
+export const serviceHandlers: Record<string, any[]> = {
+  identity: identityHandlers,
+  project: projectHandlers,
+  talent: talentHandlers,
+  payment: paymentHandlers,
+  workspace: workspaceHandlers,
+  notification: notificationHandlers,
+  admin: adminHandlers,
+};
+
+export const handlers = [
+  ...identityHandlers,
+  ...projectHandlers,
+  ...talentHandlers,
+  ...paymentHandlers,
+  ...workspaceHandlers,
+  ...adminHandlers,
+  ...notificationHandlers,
+];

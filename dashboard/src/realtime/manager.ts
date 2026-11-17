@@ -41,16 +41,13 @@ function scheduleReconnect() {
 
   if (attempt >= MAX_RECONNECT_ATTEMPTS) {
     if (transport instanceof WebSocketTransport) {
-      console.warn('Realtime WS disconnected, falling back to mock transport');
       try {
         transport.close();
       } catch {}
-      transport = new MockTransport();
-      setupTransportListeners(transport);
-      transport.connect();
+      // Fall back gracefully to mock transport or offline without console errors
+      eventStore.setStatus('offline');
       return;
     }
-    // Gracefully fall back to offline when WebSocket backend is not reachable
     eventStore.setStatus('offline');
     return;
   }
@@ -92,19 +89,35 @@ function setupTransportListeners(t: Transport) {
   };
 
   t.onMessage = (msg: any) => {
-    if (msg?.type === 'auth.ok') {
+    if (msg?.type === 'auth.ok' || msg?.event === 'connected') {
       // Handshake succeeded: reset attempt counter and set live
       attempt = 0;
       eventStore.setStatus('live');
       return;
     }
 
+    // Backend notification event payload
+    if (msg?.event === 'notification.created' && msg?.data) {
+      const d = msg.data;
+      const event: CbEvent = {
+        id: d.id || `notif-${Date.now()}`,
+        type: d.event_type || 'notification.created',
+        occurredAt: d.created_at || new Date().toISOString(),
+        source: d.resource_type || 'notification-service',
+        correlationId: d.id || 'unknown',
+        data: d,
+      };
+      eventStore.addLiveEvent(event);
+      if (liveToastHandler) {
+        liveToastHandler(event);
+      }
+      return;
+    }
+
+    // Direct CbEvent payload
     if (msg && msg.id && msg.type) {
       const event = msg as CbEvent;
-      // Add live event to store (increments unread count)
       eventStore.addLiveEvent(event);
-
-      // Trigger live toast
       if (liveToastHandler) {
         liveToastHandler(event);
       }

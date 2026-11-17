@@ -1,11 +1,12 @@
 import { CbEvent } from '../realtime/types';
+import { ProjectStatus } from '../services/project/types';
 
 export interface Project {
   id: string;
   title: string;
   repo: string;
   freelancerName: string | null;
-  status: 'draft' | 'in_progress' | 'in_review' | 'completed';
+  status: ProjectStatus;
   budget: number;
   updatedAt: string;
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import {
   Code2,
   Menu as MenuIcon,
@@ -6,6 +7,7 @@ import {
   LogOut,
   ExternalLink,
   Settings,
+  BarChart3,
 } from 'lucide-react';
 import { useSession, logout } from '../features/session/session';
 import { env } from '../lib/env';
@@ -27,11 +29,50 @@ const navItems = [
   { label: 'Settings', href: '#settings' },
 ];
 
+const adminSectionItems = [
+  { label: 'Users', href: '#users' },
+  { label: 'Health', href: '#health' },
+  { label: 'Activity', href: '#activity' },
+  { label: 'Settings', href: '#settings' },
+];
+
 export const AppShell: React.FC<AppShellProps> = ({ children }) => {
   const { user } = useSession();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);
+  const [currentHash, setCurrentHash] = useState(() => window.location.hash || '#overview');
+
+  const isAdmin = user?.role === 'admin';
+  const isAnalyticsActive = location.pathname === '/admin/analytics';
+
+  useEffect(() => {
+    const handleHash = () => {
+      setCurrentHash(window.location.hash || '#overview');
+    };
+    window.addEventListener('hashchange', handleHash);
+    return () => window.removeEventListener('hashchange', handleHash);
+  }, []);
+
+  useEffect(() => {
+    setCurrentHash(location.hash || '#overview');
+  }, [location.hash]);
+
+  const handleNavClick = (e: React.MouseEvent, href: string) => {
+    setIsMobileMenuOpen(false);
+    if (location.pathname === '/admin/analytics') {
+      e.preventDefault();
+      navigate(`/admin${href}`);
+    } else if (location.pathname !== '/owner' && location.pathname !== '/') {
+      e.preventDefault();
+      navigate(`/owner${href}`);
+    } else {
+      window.location.hash = href;
+      setCurrentHash(href);
+    }
+  };
 
   // Esc closes mobile drawer and returns focus to menu button
   useEffect(() => {
@@ -51,16 +92,55 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
 
   const navContent = (
     <nav aria-label="Section navigation" className="flex flex-col gap-1 p-3">
-      {navItems.map((item) => (
-        <a
-          key={item.href}
-          href={item.href}
+      {/* 1. Overview */}
+      <a
+        href={isAnalyticsActive ? '/admin#overview' : '#overview'}
+        onClick={(e) => handleNavClick(e, '#overview')}
+        className={`px-3 py-2 text-sm font-medium rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
+          !isAnalyticsActive && (!currentHash || currentHash === '#overview')
+            ? 'bg-primary/15 text-primary font-bold border-l-2 border-primary'
+            : 'text-text-muted hover:text-text hover:bg-surface-raised'
+        }`}
+      >
+        Overview
+      </a>
+
+      {/* 2. Admin Sidebar: Analytics router link right after Overview */}
+      {isAdmin && (
+        <Link
+          to="/admin/analytics"
+          aria-current={isAnalyticsActive ? 'page' : undefined}
           onClick={() => setIsMobileMenuOpen(false)}
-          className="px-3 py-2 text-sm font-medium rounded-md text-text-muted hover:text-text hover:bg-surface-raised transition-colors focus-visible:outline-2 focus-visible:outline-primary"
+          className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
+            isAnalyticsActive
+              ? 'bg-primary/15 text-primary font-bold border-l-2 border-primary'
+              : 'text-text-muted hover:text-text hover:bg-surface-raised'
+          }`}
         >
-          {item.label}
-        </a>
-      ))}
+          <BarChart3 className="w-4 h-4 mr-2 shrink-0" strokeWidth={1.5} />
+          Analytics
+        </Link>
+      )}
+
+      {/* 3. Other section links */}
+      {(isAdmin ? adminSectionItems : navItems.slice(1)).map((item) => {
+        const isActive = !isAnalyticsActive && currentHash === item.href;
+        const targetHref = isAnalyticsActive ? `/admin${item.href}` : item.href;
+        return (
+          <a
+            key={item.href}
+            href={targetHref}
+            onClick={(e) => handleNavClick(e, item.href)}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors focus-visible:outline-2 focus-visible:outline-primary ${
+              isActive
+                ? 'bg-primary/15 text-primary font-bold border-l-2 border-primary'
+                : 'text-text-muted hover:text-text hover:bg-surface-raised'
+            }`}
+          >
+            {item.label}
+          </a>
+        );
+      })}
     </nav>
   );
 

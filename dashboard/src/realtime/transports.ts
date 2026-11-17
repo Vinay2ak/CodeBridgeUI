@@ -2,6 +2,7 @@ import { CbEvent, UserRole } from './types';
 import { roleCanSeeEvent, simulator } from '../mocks/simulator';
 import { registerTransportHandlers } from '../mocks/controls';
 import { env } from '../lib/env';
+import { getAccessToken } from '../lib/authHeader';
 
 export interface Transport {
   connect(): void;
@@ -14,10 +15,14 @@ export interface Transport {
 }
 
 /**
- * Real WebSocket Transport
+ * Real WebSocket Transport adapted to CodeBridge contract:
+ * Endpoint: /api/v1/notifications/ws
+ * Auth: query param ?token=<jwt> and in-band { type: 'auth', token: '<jwt>' }
+ * Heartbeat: ping / pong
  */
 export class WebSocketTransport implements Transport {
   private ws: WebSocket | null = null;
+  private pingInterval: NodeJS.Timeout | number | null = null;
   public onOpen?: () => void;
   public onMessage?: (data: any) => void;
   public onClose?: (reason?: string) => void;
@@ -28,17 +33,18 @@ export class WebSocketTransport implements Transport {
       this.close();
     }
 
-    let wsUrl = env.VITE_WS_URL;
+    let wsUrl = env.VITE_WS_URL || '/api/v1/notifications/ws';
     if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const protocol =
+        typeof window !== 'undefined' && window.location.protocol === 'https:'
+          ? 'wss:'
+          : 'ws:';
+      const host = typeof window !== 'undefined' ? window.location.host : 'localhost:5175';
       const cleanPath = wsUrl.startsWith('/') ? wsUrl : `/${wsUrl}`;
-      wsUrl = `${protocol}//${window.location.host}${cleanPath}`;
+      wsUrl = `${protocol}//${host}${cleanPath}`;
     }
 
-    const token =
-      typeof localStorage !== 'undefined'
-        ? localStorage.getItem('cb_access_token') || localStorage.getItem('cb_token')
-        : null;
+    const token = getAccessToken();
     if (token) {
       wsUrl += (wsUrl.includes('?') ? '&' : '?') + `token=${encodeURIComponent(token)}`;
     }
@@ -47,19 +53,39 @@ export class WebSocketTransport implements Transport {
       this.ws = new WebSocket(wsUrl);
 
       this.ws.onopen = () => {
+        // Send in-band authentication as fallback / explicit handshake per contract
+        const activeToken = getAccessToken();
+        if (activeToken) {
+          this.send({ type: 'auth', token: activeToken });
+        }
+
+        // Start ping/pong heartbeat every 25 seconds
+        if (this.pingInterval) clearInterval(this.pingInterval);
+        this.pingInterval = setInterval(() => {
+          this.send({ type: 'ping' });
+        }, 25000);
+
         this.onOpen?.();
       };
 
       this.ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          // Heartbeat pong response
+          if (data?.type === 'pong' || data?.event === 'pong') {
+            return;
+          }
           this.onMessage?.(data);
-        } catch (err) {
-          console.warn('Failed to parse WebSocket message', err);
+        } catch {
+          // ignore malformed messages
         }
       };
 
       this.ws.onclose = (event) => {
+        if (this.pingInterval) {
+          clearInterval(this.pingInterval);
+          this.pingInterval = null;
+        }
         this.onClose?.(event.reason || 'Closed');
       };
 
@@ -73,6 +99,10 @@ export class WebSocketTransport implements Transport {
   }
 
   public close(): void {
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
+    }
     if (this.ws) {
       this.ws.close();
       this.ws = null;
@@ -101,9 +131,10 @@ export class MockTransport implements Transport {
   public connect(): void {
     this.close();
 
-    this.bc = typeof window !== 'undefined' && 'BroadcastChannel' in window
-      ? new BroadcastChannel('cb-events')
-      : null;
+    this.bc =
+      typeof window !== 'undefined' && 'BroadcastChannel' in window
+        ? new BroadcastChannel('cb-events')
+        : null;
 
     if (this.bc) {
       this.bc.onmessage = (ev) => {
@@ -185,4 +216,3 @@ export class MockTransport implements Transport {
     }
   }
 }
-

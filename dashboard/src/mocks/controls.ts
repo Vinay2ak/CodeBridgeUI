@@ -5,6 +5,8 @@ export interface MockState {
   tokenGen: number;
   isSuspended: boolean;
   failingServices: Record<string, boolean>;
+  failMatching: boolean;
+  matchingDelayMs: number;
 }
 
 export const mockState: MockState = {
@@ -12,11 +14,14 @@ export const mockState: MockState = {
   isSuspended: false,
   failingServices: {
     project: false,
+    talent: false,
     payment: false,
     workspace: false,
     admin: false,
     notification: false,
   },
+  failMatching: false,
+  matchingDelayMs: 0,
 };
 
 const listeners = new Set<() => void>();
@@ -51,6 +56,16 @@ export function isServiceFailing(service: string): boolean {
   return !!mockState.failingServices[service];
 }
 
+export function setFailMatching(fail: boolean): void {
+  mockState.failMatching = fail;
+  notifyControlsChanged();
+}
+
+export function setMatchingDelay(delayMs: number): void {
+  mockState.matchingDelayMs = Math.max(0, delayMs);
+  notifyControlsChanged();
+}
+
 let dropConnectionHandler: ((ms: number) => void) | null = null;
 let emitEventHandler: ((event: CbEvent) => void) | null = null;
 
@@ -68,7 +83,7 @@ export function dropConnection(ms = 5000): void {
   }
 }
 
-export function emitTestEvent(type: string): void {
+export function emitTestEvent(type: string, data?: Record<string, unknown>): void {
   const id = `event-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
   const correlationId = `corr-${Math.random().toString(36).substring(2, 9)}`;
   const occurredAt = new Date().toISOString();
@@ -76,6 +91,21 @@ export function emitTestEvent(type: string): void {
   let event: CbEvent;
 
   switch (type) {
+    case 'project.posted':
+      event = {
+        id,
+        type: 'project.posted',
+        occurredAt,
+        source: 'project-service',
+        correlationId,
+        data: data ?? {
+          projectId: 'p-1',
+          title: 'New project posted',
+          budget: 5000,
+        },
+      };
+      break;
+
     case 'user.registered':
       event = {
         id,
@@ -83,7 +113,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'identity-service',
         correlationId,
-        data: {
+        data: data ?? {
           userId: `usr-${Date.now().toString(36)}`,
           role: 'freelancer' as UserRole,
           displayName: 'New Freelancer',
@@ -98,7 +128,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'project-service',
         correlationId,
-        data: {
+        data: data ?? {
           projectId: initialProjects[0].id,
           title: initialProjects[0].title,
           from: 'in_progress',
@@ -114,7 +144,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'payment-service',
         correlationId,
-        data: {
+        data: data ?? {
           paymentId: `pay-${Date.now().toString(36)}`,
           projectTitle: initialProjects[0].title,
           amount: 600,
@@ -129,7 +159,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'payment-service',
         correlationId,
-        data: {
+        data: data ?? {
           paymentId: `pay-${Date.now().toString(36)}`,
           projectTitle: initialProjects[2].title,
           amount: 450,
@@ -144,7 +174,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'workspace-service',
         correlationId,
-        data: {
+        data: data ?? {
           taskId: `task-${Date.now().toString(36)}`,
           title: 'Code review and unit verification',
           projectTitle: initialProjects[1].title,
@@ -159,7 +189,7 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'health-service',
         correlationId,
-        data: {
+        data: data ?? {
           service: 'ai',
           status: 'degraded',
         },
@@ -173,17 +203,27 @@ export function emitTestEvent(type: string): void {
         occurredAt,
         source: 'system',
         correlationId,
-        data: {},
+        data: data ?? {},
       };
   }
 
   if (emitEventHandler) {
     emitEventHandler(event);
-  } else {
-    // Post to BroadcastChannel "cb-events"
+  } else if (typeof BroadcastChannel !== 'undefined') {
     const bc = new BroadcastChannel('cb-events');
     bc.postMessage(event);
     bc.close();
   }
 }
 
+// Global console helper
+if (typeof window !== 'undefined') {
+  (window as any).__cbMock = {
+    serviceDown: (service: string, down = true) => setServiceFailing(service, down),
+    failMatching: (fail = true) => setFailMatching(fail),
+    setMatchingDelay: (ms: number) => setMatchingDelay(ms),
+    emitEvent: emitTestEvent,
+    expireToken,
+    setSuspended,
+  };
+}

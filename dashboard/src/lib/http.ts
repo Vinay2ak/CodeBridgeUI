@@ -22,14 +22,22 @@ export async function httpRequest<T = unknown>(
   } = options;
 
   const method = (customOptions.method || 'GET').toUpperCase();
-  const baseUrl = env.VITE_API_BASE_URL.replace(/\/$/, '');
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  const url = `${baseUrl}${cleanEndpoint}`;
+
+  // If endpoint already starts with gateway prefix /api, use it directly; otherwise prepend VITE_API_BASE_URL
+  let url: string;
+  if (cleanEndpoint.startsWith('/api/') || cleanEndpoint === '/api') {
+    url = cleanEndpoint;
+  } else {
+    const baseUrl = env.VITE_API_BASE_URL.replace(/\/$/, '');
+    url = `${baseUrl}${cleanEndpoint}`;
+  }
 
   const startTime = Date.now();
-  const controller = typeof globalThis.AbortController !== 'undefined'
-    ? new globalThis.AbortController()
-    : new AbortController();
+  const controller =
+    typeof globalThis.AbortController !== 'undefined'
+      ? new globalThis.AbortController()
+      : new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   const headers = new Headers(customHeaders);
@@ -45,9 +53,10 @@ export async function httpRequest<T = unknown>(
   let correlationId = 'unknown';
 
   try {
-    const fetchSignal = (typeof process !== 'undefined' && process.env.NODE_ENV === 'test')
-      ? undefined
-      : controller.signal;
+    const fetchSignal =
+      typeof process !== 'undefined' && process.env.NODE_ENV === 'test'
+        ? undefined
+        : controller.signal;
 
     const response = await fetch(url, {
       ...customOptions,
@@ -59,9 +68,71 @@ export async function httpRequest<T = unknown>(
 
     clearTimeout(timer);
     const duration = Date.now() - startTime;
-    correlationId = response.headers.get('X-Correlation-Id') || 'unknown';
+    correlationId =
+      response.headers.get('X-Request-ID') ||
+      response.headers.get('X-Correlation-Id') ||
+      'unknown';
 
-    // Log call
+    // Handle 204 No Content
+    if (response.status === 204) {
+      callLog.addLog({
+        method,
+        path: cleanEndpoint,
+        status: 204,
+        ms: duration,
+        correlationId,
+        at: new Date().toISOString(),
+      });
+      return {} as T;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    const rawText = await response.text();
+
+    let data: any = null;
+    let isJson = false;
+
+    if (rawText.trim().length > 0) {
+      try {
+        data = JSON.parse(rawText);
+        isJson = true;
+      } catch {
+        isJson = false;
+      }
+    } else {
+      isJson = true;
+      data = {};
+    }
+
+    // Check for HTML response from tunnel or proxy (e.g. cloudflare, ngrok, loca.lt)
+    const isHtml =
+      contentType.includes('text/html') ||
+      rawText.trim().toLowerCase().startsWith('<!doctype') ||
+      rawText.trim().toLowerCase().startsWith('<html');
+
+    if (isHtml || (!isJson && rawText.trim().length > 0)) {
+      callLog.addLog({
+        method,
+        path: cleanEndpoint,
+        status: 503,
+        ms: duration,
+        correlationId,
+        at: new Date().toISOString(),
+      });
+      throw new ApiError({
+        status: 503,
+        code: 'SERVICE_UNAVAILABLE',
+        detail:
+          'The API answered with a page instead of JSON. Check VITE_GATEWAY_URL.',
+        correlationId,
+      });
+    }
+
+    if (data?.request_id && correlationId === 'unknown') {
+      correlationId = data.request_id;
+    }
+
+    // Log successful call
     callLog.addLog({
       method,
       path: cleanEndpoint,
@@ -71,35 +142,53 @@ export async function httpRequest<T = unknown>(
       at: new Date().toISOString(),
     });
 
-    // Handle 204 No Content
-    if (response.status === 204) {
-      return {} as T;
-    }
-
-    let data: any = null;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      try {
-        data = await response.json();
-      } catch {
-        data = null;
-      }
-    } else {
-      const text = await response.text();
-      try {
-        data = JSON.parse(text);
-      } catch {
-        data = { detail: text };
-      }
-    }
-
     if (!response.ok) {
       const status = response.status;
-      const code = data?.code || (status === 401 ? 'UNAUTHENTICATED' : status === 403 ? 'FORBIDDEN' : 'ERROR');
-      const detail = data?.detail || data?.title || response.statusText;
+
+      // Extract canonical error shape from contract or fallback
+      const backendError = data?.error;
+      const code =
+        backendError?.code ||
+        data?.code ||
+        (status === 401
+          ? 'UNAUTHENTICATED'
+          : status === 403
+          ? 'FORBIDDEN'
+          : status === 404
+          ? 'NOT_FOUND'
+          : status === 422
+          ? 'VALIDATION_ERROR'
+          : 'ERROR');
+
+      const detail =
+        backendError?.message ||
+        data?.detail ||
+        data?.message ||
+        data?.title ||
+        response.statusText;
+
       const retryAfter = response.headers.get('Retry-After')
         ? parseInt(response.headers.get('Retry-After')!, 10)
         : undefined;
+
+      const errors = Array.isArray(data?.errors)
+        ? data.errors
+        : Array.isArray(backendError?.errors)
+        ? backendError.errors
+        : undefined;
+
+      const fieldErrors: Record<string, string> | undefined =
+        backendError?.fieldErrors ||
+        backendError?.field_errors ||
+        (errors && errors.length > 0
+          ? errors.reduce(
+              (acc: Record<string, string>, curr: { field: string; message: string }) => {
+                if (curr.field) acc[curr.field] = curr.message;
+                return acc;
+              },
+              {}
+            )
+          : undefined);
 
       // Handle ACCOUNT_SUSPENDED
       if (code === 'ACCOUNT_SUSPENDED') {
@@ -110,11 +199,13 @@ export async function httpRequest<T = unknown>(
           detail,
           correlationId,
           retryAfter,
+          errors,
+          fieldErrors,
         });
       }
 
       // Handle 401 TOKEN_EXPIRED replay
-      if (status === 401 && code === 'TOKEN_EXPIRED' && !_isRetry) {
+      if (status === 401 && (code === 'TOKEN_EXPIRED' || code === 'UNAUTHORIZED') && !_isRetry) {
         try {
           const newToken = await executeRefresh();
           if (newToken) {
@@ -124,13 +215,15 @@ export async function httpRequest<T = unknown>(
               _isRetry: true,
             });
           }
-        } catch (refreshErr) {
+        } catch {
           throw new ApiError({
             status,
             code,
             detail,
             correlationId,
             retryAfter,
+            errors,
+            fieldErrors,
           });
         }
       }
@@ -141,6 +234,8 @@ export async function httpRequest<T = unknown>(
         detail,
         correlationId,
         retryAfter,
+        errors,
+        fieldErrors,
       });
     }
 
@@ -154,7 +249,8 @@ export async function httpRequest<T = unknown>(
     }
 
     const isTimeout = err?.name === 'AbortError';
-    const errorCorrelationId = correlationId !== 'unknown' ? correlationId : `client-${Date.now()}`;
+    const errorCorrelationId =
+      correlationId !== 'unknown' ? correlationId : `client-${Date.now()}`;
 
     callLog.addLog({
       method,

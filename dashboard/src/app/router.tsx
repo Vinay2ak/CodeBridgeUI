@@ -1,11 +1,14 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AppShell } from './AppShell';
-import { AuthGuard, FreelancerRedirect, FullScreenSkeleton } from './guards';
+import { AuthGuard, RoleGuard, FreelancerRedirect, FullScreenSkeleton } from './guards';
 import { ErrorBoundary } from './ErrorBoundary';
 import { NotFound } from './NotFound';
 
 const OwnerDashboard = lazy(() => import('../features/dashboard/OwnerDashboard'));
+const PostProjectPage = lazy(() => import('../features/post-project/PostProjectPage'));
+const ProjectMatchesPage = lazy(() => import('../features/matching/ProjectMatchesPage'));
+const AnalyticsPage = lazy(() => import('../features/admin-analytics/AnalyticsPage'));
 
 export const AppRoutes: React.FC = () => {
   return (
@@ -27,6 +30,33 @@ export const AppRoutes: React.FC = () => {
                 <ErrorBoundary fallbackTitle="Owner Dashboard Error">
                   <OwnerDashboard />
                 </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/owner/projects/new"
+              element={
+                <ErrorBoundary fallbackTitle="Post Project Error">
+                  <PostProjectPage />
+                </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/owner/projects/:projectId"
+              element={
+                <ErrorBoundary fallbackTitle="Project Matches Error">
+                  <ProjectMatchesPage />
+                </ErrorBoundary>
+              }
+            />
+            {/* Admin Analytics: protected by RoleGuard requiring admin */}
+            <Route
+              path="/admin/analytics"
+              element={
+                <RoleGuard requiredRole="admin">
+                  <ErrorBoundary fallbackTitle="Admin Analytics Error">
+                    <AnalyticsPage />
+                  </ErrorBoundary>
+                </RoleGuard>
               }
             />
             {/* Legacy admin route redirects to owner */}
