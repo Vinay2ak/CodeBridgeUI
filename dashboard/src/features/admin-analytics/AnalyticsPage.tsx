@@ -16,6 +16,7 @@ import { TimeRangeControl } from './TimeRangeControl';
 import { AutoRefreshControl } from './AutoRefreshControl';
 import { StatusLine, type StatusLineState } from './StatusLine';
 import { AnalyticsEmbedCard, type CardState } from './AnalyticsEmbedCard';
+import { useSession } from '../session/session';
 
 function getDocTheme(): AppTheme {
   if (typeof document === 'undefined') return 'dark';
@@ -24,9 +25,29 @@ function getDocTheme(): AppTheme {
 
 export interface AnalyticsPageProps {
   showHeader?: boolean;
+  ownerId?: string;
 }
 
-export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ showHeader = true }) => {
+export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
+  showHeader = true,
+  ownerId,
+}) => {
+  const { user } = useSession();
+
+  // Resolve effective owner ID for Grafana queries:
+  // - If an explicit ownerId prop is passed, use it.
+  // - If the logged-in user is a project owner, use their user.id.
+  // - If the user is an admin or unauthenticated, default to 'All'.
+  const effectiveOwnerId = useMemo(() => {
+    if (ownerId !== undefined && ownerId !== null) {
+      return ownerId.trim() || 'All';
+    }
+    if (user && user.role === 'owner' && user.id) {
+      return user.id;
+    }
+    return 'All';
+  }, [ownerId, user]);
+
   // 1. Initial State & Preferences
   const [prefs, setPrefs] = useState(() => loadAnalyticsPrefs());
   const [theme, setTheme] = useState<AppTheme>(getDocTheme);
@@ -123,13 +144,17 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({ showHeader = true 
       range: prefs.range,
       refresh: prefs.refresh,
       theme,
+      ownerId: effectiveOwnerId,
     });
-  }, [parsed, prefs.range, prefs.refresh, theme]);
+  }, [parsed, prefs.range, prefs.refresh, theme, effectiveOwnerId]);
 
   const openUrl = useMemo(() => {
     if (!parsed.ok) return null;
-    return buildOpenUrl(parsed, { range: prefs.range });
-  }, [parsed, prefs.range]);
+    return buildOpenUrl(parsed, {
+      range: prefs.range,
+      ownerId: effectiveOwnerId,
+    });
+  }, [parsed, prefs.range, effectiveOwnerId]);
 
   // 8. Determine Card State & Status Line State
   const cardState: CardState = useMemo(() => {

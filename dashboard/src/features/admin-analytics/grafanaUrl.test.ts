@@ -100,4 +100,39 @@ describe('grafanaUrl module', () => {
     expect(urlObj.searchParams.get('var-cluster')).toBe('prod');
     expect(urlObj.searchParams.get('orgId')).toBe('1');
   });
+
+  it('10. appends var-owner_id with specific ownerId or defaults to All', () => {
+    const raw = 'http://monitoring.local:3001/d/analytics/dashboard?orgId=1&kiosk';
+    const parsed = parseGrafanaUrl(raw) as ParsedGrafanaUrl;
+
+    // Test with specific owner ID
+    const ownerEmbed = buildEmbedUrl(parsed, {
+      range: '24h',
+      refresh: '1m',
+      theme: 'dark',
+      ownerId: '2477b19f-d4fb-42ea-925b-16364c269d49',
+    });
+    expect(new URL(ownerEmbed).searchParams.get('var-owner_id')).toBe('2477b19f-d4fb-42ea-925b-16364c269d49');
+
+    // Test default when ownerId is undefined / null
+    const defaultEmbed = buildEmbedUrl(parsed, {
+      range: '24h',
+      refresh: '1m',
+      theme: 'dark',
+    });
+    expect(new URL(defaultEmbed).searchParams.get('var-owner_id')).toBe('All');
+
+    // Test openUrl with owner ID
+    const ownerOpen = buildOpenUrl(parsed, {
+      range: '7d',
+      ownerId: 'usr-project-owner-1',
+    });
+    expect(new URL(ownerOpen).searchParams.get('var-owner_id')).toBe('usr-project-owner-1');
+
+    // Test openUrl default to All
+    const defaultOpen = buildOpenUrl(parsed, {
+      range: '7d',
+    });
+    expect(new URL(defaultOpen).searchParams.get('var-owner_id')).toBe('All');
+  });
 });

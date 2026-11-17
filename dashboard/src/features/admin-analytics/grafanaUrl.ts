@@ -53,11 +53,16 @@ export function parseGrafanaUrl(raw?: string | null): ParseGrafanaUrlResult {
 
 /**
  * Builds the iframe embedding URL with the requested time range,
- * auto-refresh, app theme, and kiosk mode.
+ * auto-refresh, app theme, kiosk mode, and optional owner ID filter.
  */
 export function buildEmbedUrl(
   parsed: ParsedGrafanaUrl,
-  options: { range: TimeRange; refresh: RefreshInterval; theme: AppTheme }
+  options: {
+    range: TimeRange;
+    refresh: RefreshInterval;
+    theme: AppTheme;
+    ownerId?: string | null;
+  }
 ): string {
   const url = new URL(parsed.url);
   url.searchParams.set('from', `now-${options.range}`);
@@ -75,16 +80,20 @@ export function buildEmbedUrl(
     url.searchParams.set('kiosk', '');
   }
 
+  const ownerIdValue =
+    options.ownerId && options.ownerId.trim() ? options.ownerId.trim() : 'All';
+  url.searchParams.set('var-owner_id', ownerIdValue);
+
   return url.toString();
 }
 
 /**
  * Builds the URL for opening Grafana in a new browser tab.
- * Strips kiosk, refresh, and theme, but preserves time range and custom filters.
+ * Strips kiosk, refresh, and theme, but preserves time range, owner ID filter, and custom filters.
  */
 export function buildOpenUrl(
   parsed: ParsedGrafanaUrl,
-  options: { range: TimeRange }
+  options: { range: TimeRange; ownerId?: string | null }
 ): string {
   const url = new URL(parsed.url);
   url.searchParams.set('from', `now-${options.range}`);
@@ -92,5 +101,10 @@ export function buildOpenUrl(
   url.searchParams.delete('kiosk');
   url.searchParams.delete('refresh');
   url.searchParams.delete('theme');
+
+  const ownerIdValue =
+    options.ownerId && options.ownerId.trim() ? options.ownerId.trim() : 'All';
+  url.searchParams.set('var-owner_id', ownerIdValue);
+
   return url.toString();
 }
