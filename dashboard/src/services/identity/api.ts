@@ -53,8 +53,12 @@ export const identityApi = {
   },
 
   getOwnerProfile: async (): Promise<OwnerProfileResponse> => {
-    const data = await http.get<any>('/api/v1/users/me/owner-profile');
-    return adaptOwnerProfileResponse(data);
+    try {
+      const data = await http.get<any>('/api/v1/users/me');
+      return adaptOwnerProfileResponse(data?.owner_profile || data?.profile || data);
+    } catch {
+      return {};
+    }
   },
 
   updateOwnerProfile: async (

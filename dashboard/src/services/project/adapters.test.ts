@@ -77,6 +77,33 @@ describe('Project Service Adapters', () => {
     expect(backendPayload.required_skills).toEqual(['python', 'stripe', 'fastapi']);
     expect(backendPayload.expected_result).toBe(internalPayload.expectedResult);
     expect(backendPayload.deadline).toBeDefined();
+    expect(backendPayload.deadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('formats deadline as exact YYYY-MM-DD date based on urgency or custom deadline', () => {
+    const withIsoDeadline = adaptCreateProjectRequest({
+      title: 'T',
+      description: 'D',
+      budget: 1000,
+      deadline: '2026-12-25T14:30:00.000Z',
+    });
+    expect(withIsoDeadline.deadline).toBe('2026-12-25');
+
+    const withDateDeadline = adaptCreateProjectRequest({
+      title: 'T',
+      description: 'D',
+      budget: 1000,
+      deadline: '2026-12-31',
+    });
+    expect(withDateDeadline.deadline).toBe('2026-12-31');
+
+    const withAsap = adaptCreateProjectRequest({
+      title: 'T',
+      description: 'D',
+      budget: 1000,
+      urgency: 'ASAP',
+    });
+    expect(withAsap.deadline).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('normalizes uppercase backend statuses to lowercase enum', () => {

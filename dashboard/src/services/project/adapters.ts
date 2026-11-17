@@ -110,14 +110,28 @@ export function adaptCreateProjectRequest(payload: CreateProjectPayload): any {
       ? payload.skills
       : payload.tags || [];
 
-  const defaultDeadline = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  let deadline: string;
+  if (payload.deadline) {
+    deadline = payload.deadline.includes('T')
+      ? payload.deadline.split('T')[0]
+      : payload.deadline;
+  } else {
+    const days =
+      payload.urgency === 'ASAP'
+        ? 2
+        : payload.urgency === 'THIS_WEEK'
+        ? 7
+        : 30;
+    const targetDate = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+    deadline = targetDate.toISOString().split('T')[0];
+  }
 
   return {
     title: payload.title,
     description: payload.description,
     budget: payload.budget,
     currency: 'INR',
-    deadline: payload.deadline || defaultDeadline,
+    deadline,
     required_skills: skills,
     expected_result: payload.expectedResult || payload.description,
   };
