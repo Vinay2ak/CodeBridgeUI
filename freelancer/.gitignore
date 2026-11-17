@@ -10,6 +10,10 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.env
+.env.mock.backup
+.env.local
+.env.*.local
 *.local
 *.tsbuildinfo
 
@@ -23,4 +27,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-

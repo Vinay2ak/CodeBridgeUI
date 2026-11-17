@@ -13,6 +13,9 @@
   --success: #34D399;
   --warning: #FBBF24;
   --danger: #F87171;
+  --accent: #5BC0DE;
+  --on-accent: #0B132B;
+  --ok: #34D399;
 }
 
 :root[data-theme="light"] {
@@ -30,5 +33,7 @@
   --success: #047857;
   --warning: #B45309;
   --danger: #B91C1C;
+  --accent: #1C2541;
+  --on-accent: #FFFFFF;
+  --ok: #047857;
 }
-

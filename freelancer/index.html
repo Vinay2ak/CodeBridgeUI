@@ -15,8 +15,10 @@
     <script>
       (function () {
         try {
+          var params = new URLSearchParams(window.location.search);
+          var themeParam = params.get("theme");
           var saved = localStorage.getItem("cb-theme");
-          if (saved === "light") {
+          if (themeParam === "light" || (saved === "light" && themeParam !== "dark")) {
             document.documentElement.setAttribute("data-theme", "light");
           } else {
             document.documentElement.removeAttribute("data-theme");

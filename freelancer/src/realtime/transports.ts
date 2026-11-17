@@ -23,7 +23,7 @@ export class WebSocketTransport implements RealtimeTransport {
   private isClosed = false;
   private currentToken: string | null = null;
 
-  constructor(private callbacks: TransportEvents) {}
+  constructor(private callbacks: TransportEvents) { }
 
   private getWsUrl(): string {
     const raw = env.wsUrl || "/api/v1/notifications/ws";
@@ -36,15 +36,9 @@ export class WebSocketTransport implements RealtimeTransport {
       base = `${origin}${path}`;
     }
 
-    const token =
-      this.currentToken ||
-      (typeof localStorage !== "undefined"
-        ? localStorage.getItem("cb_access_token")
-        : null);
-
-    if (token) {
+    if (this.currentToken) {
       const sep = base.includes("?") ? "&" : "?";
-      base = `${base}${sep}token=${encodeURIComponent(token)}`;
+      base = `${base}${sep}token=${encodeURIComponent(this.currentToken)}`;
     }
     return base;
   }
@@ -71,7 +65,8 @@ export class WebSocketTransport implements RealtimeTransport {
       this.pingTimer = setInterval(() => {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
           try {
-            this.ws.send("ping");
+            // Per Contract Section 6.1: Client sends {"type": "ping"}
+            this.ws.send(JSON.stringify({ type: "ping" }));
           } catch {
             // Ignored
           }
@@ -85,6 +80,7 @@ export class WebSocketTransport implements RealtimeTransport {
         if (
           parsed.type === "auth.ok" ||
           parsed.event === "connected" ||
+          parsed.type === "pong" ||
           parsed.event === "pong"
         ) {
           this.callbacks.onStatus("live");
@@ -97,7 +93,7 @@ export class WebSocketTransport implements RealtimeTransport {
     };
 
     this.ws.onerror = () => {
-      // WebSocket error triggers onclose
+      // WebSocket error will trigger onclose
     };
 
     this.ws.onclose = () => {
@@ -170,7 +166,7 @@ export class MockTransport implements RealtimeTransport {
   private currentToken: string | null = null;
   private timer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(private callbacks: TransportEvents) {}
+  constructor(private callbacks: TransportEvents) { }
 
   public connect(token: string | null): void {
     this.isClosed = false;
@@ -178,39 +174,30 @@ export class MockTransport implements RealtimeTransport {
     this.callbacks.onStatus("connecting");
 
     if (typeof BroadcastChannel !== "undefined") {
-      this.channel = new BroadcastChannel("cb-events");
-      this.channel.onmessage = (event) => {
-        if (this.isClosed) return;
-        this.callbacks.onMessage(event.data);
-      };
-    }
-
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => {
-      if (this.isClosed) return;
-      if (this.currentToken) {
-        this.callbacks.onStatus("live");
-      } else {
-        this.callbacks.onStatus("offline");
+      try {
+        this.channel = new BroadcastChannel("cb-events");
+        this.channel.onmessage = (event) => {
+          this.callbacks.onMessage(event.data);
+        };
+      } catch {
+        // Ignored
       }
-    }, 200);
-  }
-
-  public sendAuth(token: string): void {
-    this.currentToken = token;
-    if (!this.isClosed) {
-      this.callbacks.onStatus("live");
     }
-  }
 
-  public reconnect(): void {
-    this.callbacks.onStatus("connecting");
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       if (!this.isClosed) {
         this.callbacks.onStatus("live");
       }
-    }, 300);
+    }, 400);
+  }
+
+  public sendAuth(token: string): void {
+    this.currentToken = token;
+  }
+
+  public reconnect(): void {
+    this.connect(this.currentToken);
   }
 
   public close(): void {
@@ -223,4 +210,3 @@ export class MockTransport implements RealtimeTransport {
     this.callbacks.onStatus("offline");
   }
 }
-

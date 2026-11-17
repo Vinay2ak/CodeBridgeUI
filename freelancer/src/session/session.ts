@@ -30,19 +30,17 @@ class SessionStore {
     expiresAt: null,
   };
 
+  // In-memory refresh token fallback if needed without cookies
+  private inMemoryRefreshToken: string | null = null;
   private listeners = new Set<(state: SessionState) => void>();
   private refreshPromise: Promise<string | null> | null = null;
   private proactiveRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   private authChannel: BroadcastChannel | null = null;
 
   constructor() {
+    // Access token is strictly kept in memory
     configureHttpAuth(
-      () =>
-        this.state.accessToken ||
-        (typeof localStorage !== "undefined"
-          ? localStorage.getItem("cb_access_token") ||
-            localStorage.getItem("cb_token")
-          : null),
+      () => this.state.accessToken,
       () => this.refreshSession()
     );
 
@@ -81,41 +79,56 @@ class SessionStore {
         return;
       }
 
-      // Fetch user profile only if not already provided by refresh response
+      // Fetch user profile only if not already populated from refresh response
       let user: User | null = this.state.user;
       if (!user) {
         let rawUser: any;
         try {
-          rawUser = await request<any>("/auth/me");
-        } catch {
           rawUser = await request<any>("/users/me");
+        } catch {
+          try {
+            rawUser = await request<any>("/auth/me");
+          } catch {
+            // Both failed
+          }
         }
 
-        const userObj = rawUser?.user || rawUser?.data || rawUser || {};
-        const roleStr = (userObj.role || "freelancer").toLowerCase();
-        user = {
-          id: userObj.id || "anonymous",
-          email: userObj.email || "",
-          displayName: userObj.full_name || userObj.displayName || userObj.email?.split("@")[0] || "Freelancer",
-          role: roleStr as "freelancer",
-          status: userObj.is_active === false || userObj.status === "suspended" ? "suspended" : "active",
-          createdAt: userObj.created_at || userObj.createdAt || new Date().toISOString(),
-          onboardingCompleted: true,
-        };
+        if (rawUser) {
+          const userObj = rawUser.user || rawUser.data || rawUser;
+          const roleStr = (userObj.role || "freelancer").toLowerCase();
+          user = {
+            id: userObj.id || "anonymous",
+            email: userObj.email || "",
+            displayName:
+              userObj.displayName ||
+              userObj.full_name ||
+              userObj.name ||
+              userObj.email?.split("@")[0] ||
+              "Freelancer",
+            role: (roleStr === "owner" ? "owner" : roleStr === "admin" ? "admin" : "freelancer"),
+            status:
+              userObj.is_active === false || userObj.status === "suspended"
+                ? "suspended"
+                : "active",
+            createdAt: userObj.created_at || userObj.createdAt || new Date().toISOString(),
+            onboardingCompleted: userObj.onboardingCompleted ?? userObj.onboarding_completed ?? true,
+          };
+        }
       }
 
-      if (user.status === "suspended") {
+      if (user && user.status === "suspended") {
         this.setState({ status: "suspended", user });
         return;
       }
 
-      // Guards per contract item 4
-      if (user.onboardingCompleted === false) {
+      // Redirect if onboarding incomplete
+      if (user && user.onboardingCompleted === false) {
         window.location.assign(`${env.registerUrl}?resume=1`);
         return;
       }
 
-      if (user.role !== "freelancer") {
+      // Role guard: redirect if not freelancer
+      if (user && user.role !== "freelancer") {
         window.location.assign(`${env.dashboardUrl}/${user.role}`);
         return;
       }
@@ -127,13 +140,13 @@ class SessionStore {
 
       realtimeManager.start(token);
     } catch (err: unknown) {
-      if (
-        this.state.user ||
-        (typeof localStorage !== "undefined" &&
-          (localStorage.getItem("cb_access_token") || localStorage.getItem("cb_user"))) ||
-        env.useMocks
-      ) {
-        let fallbackUser: User = this.state.user || {
+      if (this.state.user && this.state.accessToken) {
+        this.setState({ status: "authenticated" });
+        return;
+      }
+
+      if (env.useMocks) {
+        const fallbackUser: User = {
           id: "freelancer_demo",
           email: "freelancer@demo.dev",
           displayName: "Freelancer Dev",
@@ -142,17 +155,14 @@ class SessionStore {
           createdAt: new Date().toISOString(),
           onboardingCompleted: true,
         };
-        if (typeof localStorage !== "undefined") {
-          const saved = localStorage.getItem("cb_user");
-          if (saved) {
-            try {
-              fallbackUser = JSON.parse(saved);
-            } catch {}
-          }
-        }
-        this.setState({ status: "authenticated", user: fallbackUser });
+        this.setState({
+          status: "authenticated",
+          user: fallbackUser,
+          accessToken: this.state.accessToken || "mock_token_fl_dev",
+        });
         return;
       }
+
       if (err instanceof ApiError) {
         if (err.code === "ACCOUNT_SUSPENDED" || err.status === 403) {
           this.setState({ status: "suspended" });
@@ -178,9 +188,9 @@ class SessionStore {
 
     this.refreshPromise = (async () => {
       try {
-        let storedToken: string | null = null;
-        let storedRt: string | null = null;
+        let initialToken: string | null = this.state.accessToken;
 
+        // Check URL parameters for token handoff from auth service
         if (typeof window !== "undefined") {
           const urlParams = new URLSearchParams(window.location.search);
           const hashParams = new URLSearchParams(
@@ -209,34 +219,26 @@ class SessionStore {
             } catch {
               try {
                 initialUser = JSON.parse(urlUser);
-              } catch {}
-            }
-            if (initialUser && typeof localStorage !== "undefined") {
-              localStorage.setItem("cb_user", JSON.stringify(initialUser));
+              } catch {
+                // Invalid JSON
+              }
             }
           }
 
           if (urlToken) {
-            storedToken = urlToken;
-            if (typeof localStorage !== "undefined") {
-              localStorage.setItem("cb_access_token", urlToken);
-              localStorage.setItem("cb_token", urlToken);
-            }
+            initialToken = urlToken;
             urlParams.delete("token");
             urlParams.delete("access_token");
             urlParams.delete("accessToken");
           }
 
           if (urlRt) {
-            storedRt = urlRt;
-            if (typeof localStorage !== "undefined") {
-              localStorage.setItem("cb_refresh_token", urlRt);
-              localStorage.setItem("cb_rt", urlRt);
-            }
+            this.inMemoryRefreshToken = urlRt;
             urlParams.delete("rt");
             urlParams.delete("refresh_token");
             urlParams.delete("refreshToken");
           }
+
           if (urlUser) {
             urlParams.delete("user");
             urlParams.delete("role");
@@ -249,80 +251,66 @@ class SessionStore {
             }`;
             window.history.replaceState({}, "", cleanUrl);
           }
-        }
 
-        if (!storedToken && typeof localStorage !== "undefined") {
-          storedToken =
-            localStorage.getItem("cb_access_token") ||
-            localStorage.getItem("cb_token");
-        }
-
-        if (!storedRt && typeof localStorage !== "undefined") {
-          storedRt =
-            localStorage.getItem("cb_refresh_token") ||
-            localStorage.getItem("cb_rt");
-        }
-
-        if (!storedRt && typeof document !== "undefined") {
-          const match = document.cookie.match(
-            /(?:^|;\s*)(?:cb_rt|cb_refresh_token)=([^;]*)/
-          );
-          if (match) {
-            storedRt = decodeURIComponent(match[1]);
+          if (initialUser && !this.state.user) {
+            this.setState({ user: initialUser });
           }
         }
 
-        if (!storedRt && !storedToken && !env.useMocks) {
-          return null;
-        }
-
-        let accessToken: string | null = storedToken;
+        let accessToken: string | null = initialToken;
         let expiresIn = 900;
-        let user: User | null = null;
+        let user: User | null = this.state.user;
 
-        if (storedRt || env.useMocks) {
-          try {
-            const data = await request<any>("/auth/refresh", {
-              method: "POST",
-              body: storedRt ? JSON.stringify({ refresh_token: storedRt }) : undefined,
-              skipAuth: true,
-            });
+        // In real backend, refresh token is sent as httpOnly cookie with credentials: "include"
+        // Also support inMemoryRefreshToken in request body if cookie is absent
+        try {
+          const bodyPayload = this.inMemoryRefreshToken
+            ? JSON.stringify({ refreshToken: this.inMemoryRefreshToken })
+            : undefined;
 
-            if (data.accessToken || data.access_token) {
-              accessToken = data.accessToken || data.access_token;
-            }
-            if (data.refresh_token && typeof localStorage !== "undefined") {
-              localStorage.setItem("cb_refresh_token", data.refresh_token);
-            }
-            expiresIn = data.expiresIn || data.expires_in || 900;
+          const data = await request<any>("/auth/refresh", {
+            method: "POST",
+            body: bodyPayload,
+            skipAuth: true,
+          });
 
-            const rawUser = data.user || data.data?.user;
-            if (rawUser) {
-              const roleStr = (rawUser.role || "freelancer").toLowerCase();
-              user = {
-                id: rawUser.id || "anonymous",
-                email: rawUser.email || "",
-                displayName:
-                  rawUser.full_name ||
-                  rawUser.displayName ||
-                  rawUser.email?.split("@")[0] ||
-                  "Freelancer",
-                role: roleStr as "freelancer",
-                status:
-                  rawUser.is_active === false || rawUser.status === "suspended"
-                    ? "suspended"
-                    : "active",
-                createdAt:
-                  rawUser.created_at || rawUser.createdAt || new Date().toISOString(),
-                onboardingCompleted: true,
-              };
-            }
-          } catch (refreshErr) {
-            // If refresh fails but we have a saved token or mock mode, continue
-            if (!storedToken && !env.useMocks) throw refreshErr;
-            if (env.useMocks && !accessToken) {
-              accessToken = "mock_token_fl_dev";
-            }
+          if (data && (data.accessToken || data.access_token)) {
+            accessToken = data.accessToken || data.access_token;
+          }
+          if (data && (data.refreshToken || data.refresh_token)) {
+            this.inMemoryRefreshToken = data.refreshToken || data.refresh_token;
+          }
+          expiresIn = data?.expiresIn || data?.expires_in || 900;
+
+          const rawUser = data?.user || data?.data?.user;
+          if (rawUser) {
+            const roleStr = (rawUser.role || "freelancer").toLowerCase();
+            user = {
+              id: rawUser.id || "anonymous",
+              email: rawUser.email || "",
+              displayName:
+                rawUser.displayName ||
+                rawUser.full_name ||
+                rawUser.name ||
+                rawUser.email?.split("@")[0] ||
+                "Freelancer",
+              role: (roleStr === "owner" ? "owner" : roleStr === "admin" ? "admin" : "freelancer"),
+              status:
+                rawUser.is_active === false || rawUser.status === "suspended"
+                  ? "suspended"
+                  : "active",
+              createdAt:
+                rawUser.created_at || rawUser.createdAt || new Date().toISOString(),
+              onboardingCompleted: rawUser.onboardingCompleted ?? rawUser.onboarding_completed ?? true,
+            };
+          }
+        } catch (refreshErr) {
+          // If refresh request fails, continue only if we already have an in-memory access token or mock mode
+          if (!accessToken && !env.useMocks) {
+            throw refreshErr;
+          }
+          if (env.useMocks && !accessToken) {
+            accessToken = "mock_token_fl_dev";
           }
         }
 
@@ -332,19 +320,6 @@ class SessionStore {
 
         if (!accessToken && !env.useMocks) {
           return null;
-        }
-
-        if (accessToken && typeof localStorage !== "undefined") {
-          localStorage.setItem("cb_access_token", accessToken);
-        }
-
-        if (!user && typeof localStorage !== "undefined") {
-          const savedUser = localStorage.getItem("cb_user");
-          if (savedUser) {
-            try {
-              user = JSON.parse(savedUser);
-            } catch {}
-          }
         }
 
         const expiresAt = Date.now() + expiresIn * 1000;
@@ -388,26 +363,32 @@ class SessionStore {
     if (this.proactiveRefreshTimer) {
       clearTimeout(this.proactiveRefreshTimer);
     }
-    // Proactive refresh 60 s before expiry (or half time if shorter)
-    const delaySec = Math.max(5, expiresInSec - 60);
+    const delaySec = Math.max(expiresInSec - 60, 30);
     this.proactiveRefreshTimer = setTimeout(() => {
-      if (this.state.status === "authenticated") {
-        this.refreshSession();
-      }
+      this.refreshSession().catch(() => {
+        // Failed proactive refresh; will retry on 401
+      });
     }, delaySec * 1000);
   }
 
   public async logout(): Promise<void> {
     if (this.proactiveRefreshTimer) {
       clearTimeout(this.proactiveRefreshTimer);
-    }
-    try {
-      await request("/auth/logout", { method: "POST" });
-    } catch {
-      // Ignore failure per contract
+      this.proactiveRefreshTimer = null;
     }
 
-    this.clearLocalSession();
+    try {
+      await request<void>("/auth/logout", {
+        method: "POST",
+        body: this.inMemoryRefreshToken
+          ? JSON.stringify({ refreshToken: this.inMemoryRefreshToken })
+          : undefined,
+      });
+    } catch {
+      // Ignored
+    }
+
+    this.clearSession();
 
     if (this.authChannel) {
       this.authChannel.postMessage({ type: "logout" });
@@ -417,26 +398,28 @@ class SessionStore {
   }
 
   private handleExternalLogout(): void {
-    this.clearLocalSession();
+    this.clearSession();
     window.location.assign(env.signinUrl);
   }
 
-  private clearLocalSession(): void {
+  private clearSession(): void {
+    realtimeManager.stop();
+    this.inMemoryRefreshToken = null;
+    this.setState({
+      status: "expired",
+      user: null,
+      accessToken: null,
+      expiresAt: null,
+    });
+    // Clean up any legacy localStorage tokens if present
     if (typeof localStorage !== "undefined") {
       localStorage.removeItem("cb_access_token");
       localStorage.removeItem("cb_token");
       localStorage.removeItem("cb_refresh_token");
       localStorage.removeItem("cb_rt");
+      localStorage.removeItem("cb_user");
     }
-    realtimeManager.stop();
-    this.setState({
-      status: "loading",
-      user: null,
-      accessToken: null,
-      expiresAt: null,
-    });
   }
 }
 
 export const sessionStore = new SessionStore();
-

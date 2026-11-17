@@ -1,5 +1,6 @@
 import { request } from "../../lib/http";
-import {
+import { env } from "../../lib/env";
+import type {
   FileContentResponse,
   FileSaveResponse,
   FileTreeResponse,
@@ -7,6 +8,14 @@ import {
   TaskSummary,
   Workspace,
 } from "./types";
+import {
+  adaptTaskSummary,
+  adaptTask,
+  adaptWorkspace,
+  adaptFileTree,
+  adaptFileContent,
+  adaptFileSave,
+} from "./adapters";
 import { MOCK_TASKS, MOCK_TASK_SUMMARIES } from "../../mocks/data/tasks";
 import {
   getWorkspace as getMockWorkspace,
@@ -22,9 +31,10 @@ import { getClaimedTaskIds } from "../../lib/claimedTasks";
 export const workspaceApi = {
   async getMyTasks(): Promise<{ items: TaskSummary[] }> {
     try {
-      const res = await request<{ items: TaskSummary[] }>("/tasks/mine");
+      // Contract line 371 & 697: GET /api/v1/tasks/mine
+      const res = await request<{ items?: any[] }>("/api/v1/tasks/mine");
       if (res && Array.isArray(res.items) && res.items.length > 0) {
-        return res;
+        return { items: res.items.map(adaptTaskSummary) };
       }
     } catch {
       // Backend /tasks/mine endpoint unavailable or returns 404
@@ -48,74 +58,72 @@ export const workspaceApi = {
             ]
         )
         .filter(Boolean)
-        .map((t) => ({
-          id: t.id,
-          title: t.title,
-          projectTitle: t.projectTitle,
-          status: t.status,
-          reward: t.reward,
-          dueAt: t.dueAt,
-        }));
+        .map(adaptTaskSummary);
 
       if (items.length > 0) {
         return { items };
       }
     }
 
+    if (env.useMocks) {
+      return { items: MOCK_TASK_SUMMARIES.map(adaptTaskSummary) };
+    }
     return { items: [] };
   },
 
   async getAvailableTasks(): Promise<TaskSummary[]> {
     try {
-      const res = await request<{ items?: any[]; data?: any[] }>("/projects?status=OPEN");
+      // Contract line 364 & 689: GET /api/v1/projects?status=OPEN
+      const res = await request<{ items?: any[]; data?: any[] }>("/api/v1/projects?status=OPEN");
       const list = res.items || res.data || [];
       if (Array.isArray(list) && list.length > 0) {
-        return list.map((p: any) => ({
-          id: p.id || `proj-${p.project_id}`,
-          title: p.title || "Project Task",
-          projectTitle: p.title || "Open Project",
-          status: "in_progress" as const,
-          reward: p.budget || 3000,
-          dueAt: p.deadline || new Date(Date.now() + 86400000 * 3).toISOString(),
-        }));
+        return list.map(adaptTaskSummary);
       }
     } catch {
-      // Fallback to flagship starter tasks
+      // Fallback
     }
-    return MOCK_TASK_SUMMARIES;
+    return MOCK_TASK_SUMMARIES.map(adaptTaskSummary);
   },
 
   async getTask(id: string): Promise<Task> {
     try {
-      return await request<Task>(`/tasks/${id}`);
-    } catch {
-      const fallback =
-        MOCK_TASKS[id] ||
-        MOCK_TASKS[
-          id === "task-1"
-            ? "t1"
-            : id === "task-2"
-            ? "t2"
-            : id === "task-3"
-            ? "t3"
-            : id
-        ] ||
-        MOCK_TASKS["t1"];
-      return fallback;
+      // Contract line 372: GET /api/v1/tasks/{id}
+      const raw = await request<any>(`/api/v1/tasks/${id}`);
+      return adaptTask(raw);
+    } catch (err) {
+      if (env.useMocks) {
+        const fallback =
+          MOCK_TASKS[id] ||
+          MOCK_TASKS[
+            id === "task-1"
+              ? "t1"
+              : id === "task-2"
+              ? "t2"
+              : id === "task-3"
+              ? "t3"
+              : id
+          ] ||
+          MOCK_TASKS["t1"];
+        return adaptTask(fallback);
+      }
+      throw err;
     }
   },
 
   async getWorkspace(taskId: string): Promise<Workspace> {
     try {
-      return await request<Workspace>(`/workspaces/${taskId}`);
+      // Contract line 427 & 698: GET /api/v1/workspaces/{task_id}
+      const raw = await request<any>(`/api/v1/workspaces/${taskId}`);
+      return adaptWorkspace(raw);
     } catch {
-      return getMockWorkspace(taskId);
+      return adaptWorkspace(getMockWorkspace(taskId));
     }
   },
 
   async startWorkspace(taskId: string): Promise<void> {
     try {
-      await request<void>(`/workspaces/${taskId}/start`, {
+      // Contract line 428 & 698: POST /api/v1/workspaces/{task_id}/start
+      await request<void>(`/api/v1/workspaces/${taskId}/start`, {
         method: "POST",
       });
     } catch {
@@ -125,7 +133,8 @@ export const workspaceApi = {
 
   async stopWorkspace(taskId: string): Promise<void> {
     try {
-      await request<void>(`/workspaces/${taskId}/stop`, {
+      // Contract line 429 & 698: POST /api/v1/workspaces/{task_id}/stop
+      await request<void>(`/api/v1/workspaces/${taskId}/stop`, {
         method: "POST",
       });
     } catch {
@@ -135,7 +144,8 @@ export const workspaceApi = {
 
   async resetWorkspace(taskId: string): Promise<void> {
     try {
-      await request<void>(`/workspaces/${taskId}/reset`, {
+      // Contract line 430 & 698: POST /api/v1/workspaces/{task_id}/reset
+      await request<void>(`/api/v1/workspaces/${taskId}/reset`, {
         method: "POST",
       });
     } catch {
@@ -145,31 +155,33 @@ export const workspaceApi = {
 
   async getFiles(taskId: string): Promise<FileTreeResponse> {
     try {
-      return await request<FileTreeResponse>(`/workspaces/${taskId}/files`);
+      // Contract line 431 & 699: GET /api/v1/workspaces/{task_id}/files
+      const raw = await request<any>(`/api/v1/workspaces/${taskId}/files`);
+      return adaptFileTree(raw);
     } catch {
       const ws = getMockWorkspace(taskId);
       const mockFiles = getMockFiles(taskId);
-      return {
+      return adaptFileTree({
         commit: ws.commit || "a1b2c3d",
         items: mockFiles.map((f) => ({
           path: f.path,
           type: "file" as const,
-          language: f.language,
           size: f.content.length,
-          updatedAt: new Date().toISOString(),
         })),
-      };
+      });
     }
   },
 
   async getFileContent(taskId: string, path: string): Promise<FileContentResponse> {
     try {
-      return await request<FileContentResponse>(
-        `/workspaces/${taskId}/files/content?path=${encodeURIComponent(path)}`
+      // Contract line 432 & 699: GET /api/v1/workspaces/{task_id}/files/content?path=...
+      const raw = await request<any>(
+        `/api/v1/workspaces/${taskId}/files/content?path=${encodeURIComponent(path)}`
       );
+      return adaptFileContent(raw);
     } catch {
       const snap = getMockFileContent(taskId, path);
-      return snap || { path, language: "plaintext", content: "" };
+      return adaptFileContent(snap || { path, language: "plaintext", content: "" });
     }
   },
 
@@ -179,13 +191,15 @@ export const workspaceApi = {
     content: string
   ): Promise<FileSaveResponse> {
     try {
-      return await request<FileSaveResponse>(`/workspaces/${taskId}/files/content`, {
+      // Contract line 433 & 699: PUT /api/v1/workspaces/{task_id}/files/content
+      const raw = await request<any>(`/api/v1/workspaces/${taskId}/files/content`, {
         method: "PUT",
         body: JSON.stringify({ path, content }),
       });
+      return adaptFileSave(raw);
     } catch {
       saveMockFileContent(taskId, path, content);
-      return { savedAt: new Date().toISOString() };
+      return adaptFileSave({ savedAt: new Date().toISOString() });
     }
   },
 };

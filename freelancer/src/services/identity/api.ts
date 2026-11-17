@@ -1,22 +1,24 @@
 import { request } from "../../lib/http";
-import { RefreshResponse, User } from "./types";
+import type { RefreshResponse, User } from "./types";
+import { adaptRefreshResponse, adaptUser } from "./adapters";
 
 export const identityApi = {
-  refresh(): Promise<RefreshResponse> {
-    return request<RefreshResponse>("/auth/refresh", {
+  async refresh(): Promise<RefreshResponse> {
+    const raw = await request<any>("/api/v1/auth/refresh", {
       method: "POST",
       skipAuth: true,
     });
+    return adaptRefreshResponse(raw);
   },
 
-  logout(): Promise<void> {
-    return request<void>("/auth/logout", {
+  async logout(): Promise<void> {
+    await request<void>("/api/v1/auth/logout", {
       method: "POST",
     });
   },
 
-  getCurrentUser(): Promise<User> {
-    return request<User>("/users/me");
+  async getCurrentUser(): Promise<User> {
+    const raw = await request<any>("/api/v1/users/me");
+    return adaptUser(raw);
   },
 };
-

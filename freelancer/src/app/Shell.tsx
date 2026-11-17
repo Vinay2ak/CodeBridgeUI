@@ -131,42 +131,45 @@ export const Shell: React.FC<ShellProps> = ({
           {/* Core 3-View Navigation Switcher */}
           <nav
             aria-label="Core Freelancer Navigation"
-            className="flex items-center gap-1 bg-canvas p-1 rounded-lg border border-line"
+            className="flex items-center gap-1 bg-canvas p-1 rounded-md border border-line"
           >
             <button
               onClick={() => setActiveView("radar")}
+              aria-current={activeView === "radar" ? "page" : undefined}
               className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                 activeView === "radar"
-                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
                   : "text-muted hover:text-ink"
               }`}
             >
-              <Radio className="h-3.5 w-3.5" />
-              <span>Task Radar</span>
+              <Radio className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Tasks</span>
             </button>
 
             <button
               onClick={() => setActiveView("workspace")}
+              aria-current={activeView === "workspace" ? "page" : undefined}
               className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                 activeView === "workspace"
-                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
                   : "text-muted hover:text-ink"
               }`}
             >
-              <Server className="h-3.5 w-3.5" />
-              <span>Controlled Workspace</span>
+              <Server className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Workspace</span>
             </button>
 
             <button
               onClick={() => setActiveView("portfolio")}
+              aria-current={activeView === "portfolio" ? "page" : undefined}
               className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
                 activeView === "portfolio"
-                  ? "bg-surface text-primary shadow-sm border border-line font-bold"
+                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
                   : "text-muted hover:text-ink"
               }`}
             >
-              <Award className="h-3.5 w-3.5" />
-              <span>Verified Portfolio</span>
+              <Award className="h-3.5 w-3.5" aria-hidden="true" />
+              <span>Portfolio</span>
             </button>
           </nav>
         </div>

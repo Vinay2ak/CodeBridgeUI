@@ -1,72 +1,70 @@
 import { request } from "../../lib/http";
-import type { PortfolioSummary, VerifiedWorkRecord } from "./types";
+import type { PortfolioSummary } from "./types";
+import { adaptPortfolioSummary } from "./adapters";
 
-const DEFAULT_VERIFIED_RECORDS: VerifiedWorkRecord[] = [
+const DEFAULT_VERIFIED_RECORDS = [
   {
     id: "CB-VER-891",
-    projectId: "proj_1024",
-    projectTitle: "Fix payment callback idempotency & signature verification",
-    completedAt: "2026-09-08T18:30:00.000Z",
-    payoutAmount: 5000,
+    project_id: "proj_1024",
+    project_title: "Fix payment callback idempotency & signature verification",
+    completed_at: "2026-09-08T18:30:00.000Z",
+    payout_amount: 5000,
     currency: "INR",
-    payoutStatus: "RELEASED",
-    skillsProven: ["Python", "FastAPI", "PostgreSQL", "Pytest", "Idempotency"],
-    verificationBadge: "VERIFIED_TEST_PASS_100",
-    repoRef: "git.codebridge.dev/repos/proj_1024@c4b2a8f",
+    payout_status: "RELEASED",
+    skills_proven: ["Python", "FastAPI", "PostgreSQL", "Pytest", "Idempotency"],
+    verification_badge: "VERIFIED_TEST_PASS_100",
+    repo_ref: "git.codebridge.dev/repos/proj_1024@c4b2a8f",
     reviewer: "Verified by CodeBridge Automated Escrow Test-Gate",
-    recruiterProofUrl: "https://verify.codebridge.dev/c/CB-VER-891-92A8",
+    recruiter_proof_url: "https://verify.codebridge.dev/c/CB-VER-891-92A8",
   },
   {
     id: "CB-VER-744",
-    projectId: "proj_0982",
-    projectTitle: "Secure Auth0 JWT signature validation & key rotation service",
-    completedAt: "2026-08-22T14:15:00.000Z",
-    payoutAmount: 8500,
+    project_id: "proj_0982",
+    project_title: "Secure Auth0 JWT signature validation & key rotation service",
+    completed_at: "2026-08-22T14:15:00.000Z",
+    payout_amount: 8500,
     currency: "INR",
-    payoutStatus: "RELEASED",
-    skillsProven: ["TypeScript", "Node.js", "JWT", "Security Auditing"],
-    verificationBadge: "VERIFIED_SECURITY_GATE",
-    repoRef: "git.codebridge.dev/repos/proj_0982@9e13df7",
+    payout_status: "RELEASED",
+    skills_proven: ["TypeScript", "Node.js", "JWT", "Security Auditing"],
+    verification_badge: "VERIFIED_SECURITY_GATE",
+    repo_ref: "git.codebridge.dev/repos/proj_0982@9e13df7",
     reviewer: "Verified by CodeBridge Automated Escrow Test-Gate",
-    recruiterProofUrl: "https://verify.codebridge.dev/c/CB-VER-744-1B9C",
+    recruiter_proof_url: "https://verify.codebridge.dev/c/CB-VER-744-1B9C",
   },
   {
     id: "CB-VER-602",
-    projectId: "proj_0831",
-    projectTitle: "Optimized async database connection pooling & connection leak fixes",
-    completedAt: "2026-08-05T11:45:00.000Z",
-    payoutAmount: 6000,
+    project_id: "proj_0831",
+    project_title: "Optimized async database connection pooling & connection leak fixes",
+    completed_at: "2026-08-05T11:45:00.000Z",
+    payout_amount: 6000,
     currency: "INR",
-    payoutStatus: "RELEASED",
-    skillsProven: ["Python", "AsyncIO", "PostgreSQL", "Docker", "Stress Testing"],
-    verificationBadge: "VERIFIED_PERFORMANCE_TEST",
-    repoRef: "git.codebridge.dev/repos/proj_0831@3f84dc2",
+    payout_status: "RELEASED",
+    skills_proven: ["Python", "AsyncIO", "PostgreSQL", "Docker", "Stress Testing"],
+    verification_badge: "VERIFIED_PERFORMANCE_TEST",
+    repo_ref: "git.codebridge.dev/repos/proj_0831@3f84dc2",
     reviewer: "Verified by CodeBridge Automated Escrow Test-Gate",
-    recruiterProofUrl: "https://verify.codebridge.dev/c/CB-VER-602-77F1",
+    recruiter_proof_url: "https://verify.codebridge.dev/c/CB-VER-602-77F1",
   },
 ];
 
 export const profileApi = {
   async getVerifiedWork(): Promise<PortfolioSummary> {
     try {
-      const data = await request<PortfolioSummary>("/profile/verified-work");
-      if (data && Array.isArray(data.records) && data.records.length > 0) {
-        return data;
+      // Contract line 468 & 55: /api/v1/profile/verified-work (alias to /verification/me)
+      let data: any;
+      try {
+        data = await request<any>("/api/v1/profile/verified-work");
+      } catch {
+        data = await request<any>("/api/v1/verification/me");
+      }
+
+      if (data && ((Array.isArray(data) && data.length > 0) || (Array.isArray(data.records) && data.records.length > 0))) {
+        return adaptPortfolioSummary(data);
       }
     } catch {
-      // Graceful fallback to verified engineering records
+      // Fallback
     }
 
-    const totalReleased = DEFAULT_VERIFIED_RECORDS.reduce((sum, r) => sum + r.payoutAmount, 0);
-    const uniqueSkills = new Set<string>();
-    DEFAULT_VERIFIED_RECORDS.forEach((r) => r.skillsProven.forEach((s) => uniqueSkills.add(s)));
-
-    return {
-      verifiedProjectsCount: DEFAULT_VERIFIED_RECORDS.length,
-      escrowEarningsReleased: totalReleased,
-      testPassRate: 100,
-      skillsProvenCount: uniqueSkills.size,
-      records: DEFAULT_VERIFIED_RECORDS,
-    };
+    return adaptPortfolioSummary(DEFAULT_VERIFIED_RECORDS);
   },
 };

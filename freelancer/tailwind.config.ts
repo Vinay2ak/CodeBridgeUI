@@ -13,6 +13,9 @@ export default {
         "line-strong": "var(--control-border)",
         ink: "var(--text)",
         muted: "var(--text-muted)",
+        accent: "var(--accent)",
+        "on-accent": "var(--on-accent)",
+        ok: "var(--ok)",
         primary: "var(--primary)",
         "primary-hover": "var(--primary-hover)",
         "primary-active": "var(--primary-active)",
@@ -43,15 +46,17 @@ export default {
         sm: "var(--shadow-sm)",
         md: "var(--shadow-md)",
       },
-      backgroundImage: {
-        brand: "var(--brand-gradient)",
-      },
       fontFamily: {
-        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
-        mono: ["JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+        sans: ["Geist Variable", "Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "Roboto", "sans-serif"],
+        mono: ["Geist Mono Variable", "JetBrains Mono", "ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "Consolas", "monospace"],
+      },
+      borderRadius: {
+        sm: "4px",
+        md: "6px",
+        lg: "6px",
+        xl: "6px",
       },
     },
   },
   plugins: [],
 } satisfies Config;
-

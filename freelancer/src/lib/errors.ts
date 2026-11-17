@@ -1,3 +1,8 @@
+export interface FieldError {
+  field: string;
+  message: string;
+}
+
 export interface ApiErrorBody {
   type?: string;
   title?: string;
@@ -5,6 +10,8 @@ export interface ApiErrorBody {
   code: string;
   detail: string;
   correlationId: string;
+  fieldErrors?: FieldError[];
+  retryAfter?: number;
 }
 
 export class ApiError extends Error {
@@ -13,12 +20,14 @@ export class ApiError extends Error {
   public detail: string;
   public correlationId: string;
   public retryAfter?: number;
+  public fieldErrors?: FieldError[];
 
   constructor(body: {
     status: number;
     code: string;
     detail: string;
     correlationId: string;
+    fieldErrors?: FieldError[];
     retryAfter?: number;
   }) {
     super(body.detail || body.code);
@@ -27,7 +36,7 @@ export class ApiError extends Error {
     this.code = body.code;
     this.detail = body.detail;
     this.correlationId = body.correlationId;
+    this.fieldErrors = body.fieldErrors;
     this.retryAfter = body.retryAfter;
   }
 }
-

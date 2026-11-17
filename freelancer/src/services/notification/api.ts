@@ -1,9 +1,14 @@
 import { request } from "../../lib/http";
-import { NotificationsResponse } from "./types";
+import type { NotificationsResponse } from "./types";
+import { adaptNotificationsResponse } from "./adapters";
 
 export const notificationApi = {
-  getNotifications(): Promise<NotificationsResponse> {
-    return request<NotificationsResponse>("/notifications");
+  async getNotifications(): Promise<NotificationsResponse> {
+    try {
+      const raw = await request<any>("/api/v1/notifications");
+      return adaptNotificationsResponse(raw);
+    } catch {
+      return { items: [] };
+    }
   },
 };
-

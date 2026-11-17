@@ -1,4 +1,4 @@
-import { ApiError } from "./errors";
+import { ApiError, FieldError } from "./errors";
 import { appendCallLog } from "./callLog";
 import { env } from "./env";
 
@@ -56,16 +56,18 @@ export async function request<T = unknown>(
       ...options,
       method,
       headers,
-      credentials: "same-origin",
+      credentials: "include",
       signal: controller.signal,
     });
   } catch (err: unknown) {
     clearTimeout(timeoutId);
     const ms = Date.now() - startTime;
     const isTimeout = err instanceof DOMException && err.name === "AbortError";
-    const status = 503;
-    const code = isTimeout ? "GATEWAY_TIMEOUT" : "SERVICE_UNAVAILABLE";
-    const detail = isTimeout ? "Request timed out after 10s" : "Network error or service unavailable";
+    const status = isTimeout ? 504 : 503;
+    const code = isTimeout ? "SERVICE_TIMEOUT" : "SERVICE_UNAVAILABLE";
+    const detail = isTimeout
+      ? "The upstream service timed out while processing the request."
+      : "Network error or service unavailable";
 
     appendCallLog({
       method,
@@ -87,7 +89,12 @@ export async function request<T = unknown>(
   }
 
   const ms = Date.now() - startTime;
-  correlationId = response.headers.get("x-correlation-id") || response.headers.get("X-Correlation-Id") || "none";
+  correlationId =
+    response.headers.get("x-request-id") ||
+    response.headers.get("X-Request-ID") ||
+    response.headers.get("x-correlation-id") ||
+    response.headers.get("X-Correlation-Id") ||
+    "none";
 
   appendCallLog({
     method,
@@ -103,12 +110,12 @@ export async function request<T = unknown>(
     try {
       const cloned = response.clone();
       const errJson = await cloned.json();
-      errorCode = errJson.code || "";
+      errorCode = errJson.error?.code || errJson.code || "";
     } catch {
       // not JSON
     }
 
-    if (errorCode === "TOKEN_EXPIRED") {
+    if (errorCode === "UNAUTHORIZED" || errorCode === "TOKEN_EXPIRED" || !errorCode) {
       if (!refreshPromise) {
         refreshPromise = refreshSessionFn().finally(() => {
           refreshPromise = null;
@@ -126,18 +133,77 @@ export async function request<T = unknown>(
   }
 
   if (!response.ok) {
-    let errorDetail = response.statusText;
+    const contentType = response.headers.get("content-type") || "";
+    const isJson = contentType.includes("application/json") || contentType.includes("problem+json");
+
     let errorCode = "UNKNOWN_ERROR";
+    let errorDetail = response.statusText;
+    let fieldErrors: FieldError[] | undefined = undefined;
+
+    if (!isJson) {
+      // Non-JSON answer (e.g. HTML from tunnel proxy)
+      throw new ApiError({
+        status: response.status === 200 ? 503 : response.status,
+        code: "SERVICE_UNAVAILABLE",
+        detail: "The API answered with a page instead of JSON. Check VITE_GATEWAY_URL.",
+        correlationId,
+      });
+    }
 
     try {
-      const errJson = await response.json();
-      errorCode = errJson.code || errorCode;
-      errorDetail = errJson.detail || errJson.title || errorDetail;
-      if (errJson.correlationId) {
+      const rawText = await response.text();
+      if (!rawText.trim().startsWith("{") && !rawText.trim().startsWith("[")) {
+        throw new ApiError({
+          status: response.status === 200 ? 503 : response.status,
+          code: "SERVICE_UNAVAILABLE",
+          detail: "The API answered with a page instead of JSON. Check VITE_GATEWAY_URL.",
+          correlationId,
+        });
+      }
+
+      const errJson = JSON.parse(rawText);
+
+      // Backend canonical error shape from contract: { success: false, error: { code, message }, request_id }
+      if (errJson.error && typeof errJson.error === "object") {
+        errorCode = errJson.error.code || errorCode;
+        errorDetail = errJson.error.message || errorDetail;
+      } else {
+        errorCode = errJson.code || errorCode;
+        errorDetail =
+          (typeof errJson.detail === "string" ? errJson.detail : undefined) ||
+          errJson.message ||
+          errJson.title ||
+          errorDetail;
+      }
+
+      if (errJson.request_id) {
+        correlationId = errJson.request_id;
+      } else if (errJson.correlationId) {
         correlationId = errJson.correlationId;
       }
-    } catch {
-      // Body not JSON
+
+      // FastAPI validation error detail array [{ loc: [...], msg: "..." }]
+      if (Array.isArray(errJson.detail)) {
+        fieldErrors = errJson.detail.map((d: any) => ({
+          field: Array.isArray(d.loc) ? String(d.loc[d.loc.length - 1] ?? "") : "",
+          message: d.msg || d.message || "Invalid value",
+        }));
+      } else if (Array.isArray(errJson.errors)) {
+        fieldErrors = errJson.errors.map((e: any) => ({
+          field: e.field || "",
+          message: e.message || "",
+        }));
+      }
+    } catch (parseErr) {
+      if (parseErr instanceof ApiError) {
+        throw parseErr;
+      }
+      throw new ApiError({
+        status: response.status === 200 ? 503 : response.status,
+        code: "SERVICE_UNAVAILABLE",
+        detail: "The API answered with a page instead of JSON. Check VITE_GATEWAY_URL.",
+        correlationId,
+      });
     }
 
     const retryAfterHeader = response.headers.get("retry-after") || response.headers.get("Retry-After");
@@ -148,6 +214,7 @@ export async function request<T = unknown>(
       code: errorCode,
       detail: errorDetail,
       correlationId,
+      fieldErrors,
       retryAfter,
     });
   }
@@ -156,6 +223,19 @@ export async function request<T = unknown>(
     return undefined as unknown as T;
   }
 
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("application/json")) {
+    const text = await response.text();
+    if (!text.trim().startsWith("{") && !text.trim().startsWith("[")) {
+      throw new ApiError({
+        status: 503,
+        code: "SERVICE_UNAVAILABLE",
+        detail: "The API answered with a page instead of JSON. Check VITE_GATEWAY_URL.",
+        correlationId,
+      });
+    }
+    return JSON.parse(text) as T;
+  }
+
   return (await response.json()) as T;
 }
-
