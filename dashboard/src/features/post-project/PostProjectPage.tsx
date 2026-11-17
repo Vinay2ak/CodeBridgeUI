@@ -14,9 +14,11 @@ import { getOwnerProfile } from '../../services/identity/api';
 import { createProject } from '../../services/project/api';
 import { OptionRadioGroup } from './components/OptionRadioGroup';
 import { Button } from '../../components/ui/Button';
+import { useQueryClient } from '@tanstack/react-query';
 
 export const PostProjectPage: React.FC = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [draftStatus, setDraftStatus] = useState<'saved' | 'saving' | null>(null);
 
@@ -114,6 +116,9 @@ export const PostProjectPage: React.FC = () => {
 
       // Clear draft on successful creation
       clearDraft();
+
+      // Invalidate projects cache immediately for real-time dashboard update
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
 
       // Automatically open the project page with matching developers
       navigate(`/owner/projects/${created.id}`);

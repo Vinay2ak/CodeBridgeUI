@@ -20,7 +20,9 @@ export function useProjectsQuery() {
     queryKey: queryKeys.projects,
     queryFn: () => projectApi.getProjects(),
     enabled: status === 'authenticated',
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
     retry: 1,
   });
 }
@@ -45,7 +47,9 @@ export function usePaymentsSummaryQuery() {
       }
     },
     enabled: status === 'authenticated',
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 10_000,
+    refetchOnWindowFocus: true,
     retry: 0,
   });
 }
@@ -62,7 +66,9 @@ export function useTasksMineQuery() {
       }
     },
     enabled: status === 'authenticated',
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
     retry: 0,
   });
 }
@@ -79,7 +85,9 @@ export function useNotificationsQuery() {
       }
     },
     enabled: status === 'authenticated',
-    staleTime: 60_000,
+    staleTime: 5_000,
+    refetchInterval: 5_000,
+    refetchOnWindowFocus: true,
     retry: 0,
   });
 

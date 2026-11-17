@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/Button';
 import { projectApi } from '../../services/project/api';
 import { CreateProjectPayload, ProjectStatus } from '../../services/project/types';
 import { useToast } from '../../components/ui/Toast';
+import { useQueryClient } from '@tanstack/react-query';
 import { DeveloperProfile } from '../talent/types';
 
 interface PostProjectModalProps {
@@ -32,6 +33,7 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
   onClearDeveloper,
 }) => {
   const { addToast } = useToast();
+  const queryClient = useQueryClient();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -124,6 +126,7 @@ export const PostProjectModal: React.FC<PostProjectModalProps> = ({
       };
 
       await projectApi.createProject(payload);
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
 
       addToast({
         title: selectedDeveloper ? `Assigned to ${selectedDeveloper.name}` : 'Project Posted',

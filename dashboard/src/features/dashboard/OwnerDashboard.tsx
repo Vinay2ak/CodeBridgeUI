@@ -63,7 +63,7 @@ export const OwnerDashboard: React.FC = () => {
 
   // KPI Calculations
   const activeProjectsCount = projects.filter(
-    (p: Project) => p.status === 'in_progress' || p.status === 'in_review'
+    (p: Project) => p.status === 'open' || p.status === 'in_progress' || p.status === 'in_review'
   ).length;
 
   const awaitingReviewCount = projects.filter(
@@ -182,7 +182,7 @@ export const OwnerDashboard: React.FC = () => {
               <KpiCard
                 label="Active projects"
                 value={activeProjectsCount}
-                hint="In progress or in review"
+                hint="Open, in progress or in review"
                 icon={<FolderGit2 className="w-5 h-5" />}
                 isLoading={projectsQuery.isLoading}
                 error={projectsQuery.error as Error}
