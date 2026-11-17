@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
-  ChevronRight,
   AlertCircle,
   RefreshCw,
   Sparkles,
   Check,
   CheckCircle2,
+  Clock,
+  FileText,
+  X,
+  Layers,
+  ArrowRight,
 } from "lucide-react";
 import { projectApi } from "../../services/project/api";
 import { workspaceApi } from "../../services/workspace/api";
@@ -14,6 +18,7 @@ import { paymentApi } from "../../services/payment/api";
 import { profileApi } from "../../services/profile/api";
 import type { ProjectScope } from "../../services/project/types";
 import { formatCurrencyINR } from "../../lib/format";
+import { Button } from "../../components/ui/Button";
 
 interface TaskRadarViewProps {
   onOpenWorkspace: (projectId: string) => void;
@@ -41,18 +46,11 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
   onOpenWorkspace,
   selectedTaskId,
 }) => {
-  const [taskAccepted, setTaskAccepted] = useState<boolean>(false);
-  const [taskDeclined, setTaskDeclined] = useState<boolean>(false);
+  const [taskAcceptedMap, setTaskAcceptedMap] = useState<Record<string, boolean>>({});
+  const [taskDeclinedMap, setTaskDeclinedMap] = useState<Record<string, boolean>>({});
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>("");
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
-    selectedTaskId || null
-  );
-
-  useEffect(() => {
-    if (selectedTaskId) {
-      setSelectedProjectId(selectedTaskId);
-    }
-  }, [selectedTaskId]);
+  const [selectedProjectForModal, setSelectedProjectForModal] =
+    useState<ProjectScope | null>(null);
 
   // Fetch logged-in freelancer profile skills for personalized tech stack matching
   const { data: userSkills = [] } = useQuery<string[]>({
@@ -108,76 +106,76 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
     });
   }, [projects, userSkills]);
 
-  const activeProject: ProjectScope | undefined =
-    sortedProjects.find((p) => p.id === selectedProjectId) ||
-    sortedProjects[0] ||
-    projects?.find((p) => p.id === selectedTaskId) ||
-    projects?.[0];
-
-  const currentMatch = activeProject
-    ? computeSkillMatch(activeProject, userSkills)
-    : { matched: false, matchedSkills: [] as string[], matchPercentage: 0 };
-
-  // Real-time task specification query from /api/v1/tasks/{id}
-  const {
-    data: taskDetails,
-    isLoading: taskLoading,
-  } = useQuery({
-    queryKey: ["task", activeProject?.id],
-    queryFn: async () => {
-      if (!activeProject?.id) return null;
-      try {
-        return await workspaceApi.getTask(activeProject.id);
-      } catch {
-        return null;
-      }
-    },
-    enabled: !!activeProject?.id,
-    staleTime: 30_000,
-  });
-
-  // Real-time escrow payment query from /api/v1/payment/escrow/{id}
-  const {
-    data: escrowData,
-  } = useQuery({
-    queryKey: ["escrow", activeProject?.id],
-    queryFn: async () => {
-      if (!activeProject?.id) return null;
-      try {
-        return await paymentApi.getEscrow(activeProject.id);
-      } catch {
-        return null;
-      }
-    },
-    enabled: !!activeProject?.id,
-    staleTime: 30_000,
-  });
-
+  // If selectedTaskId prop is passed from outside, automatically open the modal for that task
   useEffect(() => {
-    if (activeProject && activeProject.projectState === "in_progress") {
-      setTaskAccepted(true);
+    if (selectedTaskId && sortedProjects.length > 0) {
+      const found = sortedProjects.find((p) => p.id === selectedTaskId);
+      if (found) {
+        setSelectedProjectForModal(found);
+      }
     }
-  }, [activeProject]);
+  }, [selectedTaskId, sortedProjects]);
+
+  // Close modal on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setSelectedProjectForModal(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
+  // Real-time task specification query for the project open in the modal
+  const { data: taskDetails } = useQuery({
+    queryKey: ["task", selectedProjectForModal?.id],
+    queryFn: async () => {
+      if (!selectedProjectForModal?.id) return null;
+      try {
+        return await workspaceApi.getTask(selectedProjectForModal.id);
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!selectedProjectForModal?.id,
+    staleTime: 30_000,
+  });
+
+  // Real-time escrow payment query for the project open in the modal
+  useQuery({
+    queryKey: ["escrow", selectedProjectForModal?.id],
+    queryFn: async () => {
+      if (!selectedProjectForModal?.id) return null;
+      try {
+        return await paymentApi.getEscrow(selectedProjectForModal.id);
+      } catch {
+        return null;
+      }
+    },
+    enabled: !!selectedProjectForModal?.id,
+    staleTime: 30_000,
+  });
 
   const announce = (msg: string) => {
     setLiveAnnouncement(msg);
     setTimeout(() => setLiveAnnouncement(""), 3000);
   };
 
-  const handleAccept = () => {
-    setTaskAccepted(true);
-    setTaskDeclined(false);
+  const handleAccept = (projectId: string) => {
+    setTaskAcceptedMap((prev) => ({ ...prev, [projectId]: true }));
+    setTaskDeclinedMap((prev) => ({ ...prev, [projectId]: false }));
     announce("Task accepted. Workspace is ready to launch.");
   };
 
-  const handleDecline = () => {
-    setTaskDeclined(true);
-    setTaskAccepted(false);
+  const handleDecline = (projectId: string) => {
+    setTaskDeclinedMap((prev) => ({ ...prev, [projectId]: true }));
+    setTaskAcceptedMap((prev) => ({ ...prev, [projectId]: false }));
     announce("Task declined.");
   };
 
-  const handleReconsider = () => {
-    setTaskDeclined(false);
+  const handleReconsider = (projectId: string) => {
+    setTaskDeclinedMap((prev) => ({ ...prev, [projectId]: false }));
     announce("Task available to accept.");
   };
 
@@ -227,34 +225,33 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
   };
 
   // Loading skeleton state
-  if (projectsLoading || (activeProject && taskLoading && !taskDetails)) {
+  if (projectsLoading) {
     return (
       <div
         className="flex-1 overflow-y-auto bg-canvas p-6 lg:p-10"
         role="status"
         aria-label="Loading task details"
       >
-        <div className="max-w-[1120px] mx-auto grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-12">
-          <div className="space-y-8 max-w-[720px]">
-            <div className="h-4 w-32 bg-surface rounded animate-pulse" />
-            <div className="h-9 w-3/4 bg-surface rounded animate-pulse" />
-            <div className="h-px bg-line" />
-            <div className="space-y-3">
-              <div className="h-5 w-28 bg-surface rounded animate-pulse" />
-              <div className="h-4 w-full bg-surface rounded animate-pulse" />
-              <div className="h-4 w-5/6 bg-surface rounded animate-pulse" />
-            </div>
-            <div className="h-px bg-line" />
-            <div className="space-y-3">
-              <div className="h-5 w-28 bg-surface rounded animate-pulse" />
-              <div className="h-4 w-full bg-surface rounded animate-pulse" />
-              <div className="h-4 w-4/5 bg-surface rounded animate-pulse" />
-            </div>
+        <div className="max-w-[1120px] mx-auto space-y-8">
+          <div className="space-y-3">
+            <div className="h-6 w-48 bg-surface rounded animate-pulse" />
+            <div className="h-4 w-96 bg-surface rounded animate-pulse" />
           </div>
-          <div className="h-96 border border-line rounded-md bg-surface p-5 space-y-6">
-            <div className="h-8 w-32 bg-canvas rounded animate-pulse" />
-            <div className="h-24 bg-canvas rounded animate-pulse" />
-            <div className="h-10 bg-canvas rounded animate-pulse" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div
+                key={i}
+                className="h-64 border border-line rounded-2xl bg-surface p-6 space-y-4"
+              >
+                <div className="flex justify-between items-center">
+                  <div className="h-7 w-24 bg-canvas rounded animate-pulse" />
+                  <div className="h-5 w-20 bg-canvas rounded-full animate-pulse" />
+                </div>
+                <div className="h-6 w-3/4 bg-canvas rounded animate-pulse" />
+                <div className="h-12 w-full bg-canvas rounded animate-pulse" />
+                <div className="h-10 w-full bg-canvas rounded-xl animate-pulse" />
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -265,7 +262,7 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
   if (projectsError) {
     return (
       <div className="flex-1 flex items-center justify-center bg-canvas p-6 text-center">
-        <div className="max-w-md w-full border border-line rounded-md bg-surface p-6 space-y-4">
+        <div className="max-w-md w-full border border-line rounded-2xl bg-surface p-6 space-y-4">
           <div className="flex justify-center">
             <AlertCircle className="h-6 w-6 text-danger" aria-hidden="true" />
           </div>
@@ -280,7 +277,7 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
           <button
             type="button"
             onClick={() => refetchProjects()}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-on-primary bg-primary rounded-md hover:opacity-95 transition-opacity"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-on-primary bg-primary rounded-xl hover:opacity-95 transition-opacity"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             <span>Retry Connection</span>
@@ -291,10 +288,10 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
   }
 
   // Empty state if backend returns 0 projects
-  if (!activeProject) {
+  if (sortedProjects.length === 0) {
     return (
       <div className="flex-1 flex items-center justify-center bg-canvas p-6 text-center">
-        <div className="max-w-md w-full border border-line rounded-md bg-surface p-6 space-y-4">
+        <div className="max-w-md w-full border border-line rounded-2xl bg-surface p-6 space-y-4">
           <h2 className="text-base font-semibold text-ink">No tasks available</h2>
           <p className="text-sm text-muted">
             There are currently no open tasks or assigned projects on the backend gateway.
@@ -302,7 +299,7 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
           <button
             type="button"
             onClick={() => refetchProjects()}
-            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-on-primary bg-primary rounded-md hover:opacity-95 transition-opacity"
+            className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm font-semibold text-on-primary bg-primary rounded-xl hover:opacity-95 transition-opacity"
           >
             <RefreshCw className="h-4 w-4" aria-hidden="true" />
             <span>Refresh</span>
@@ -312,454 +309,474 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
     );
   }
 
-  const taskId = activeProject.id;
-  const taskTitle = activeProject.title;
-  const problemText = activeProject.description;
-  const expectedOutcome = activeProject.expectedResult;
-  const skillsList =
+  // Active project data for the modal details
+  const modalTaskId = selectedProjectForModal?.id || "";
+  const modalTaskTitle = selectedProjectForModal?.title || "";
+  const modalProblemText =
+    selectedProjectForModal?.description ||
+    (Array.isArray(taskDetails?.brief) ? taskDetails.brief[0] : "") ||
+    "Issue details and reproduction steps provided by project owner.";
+  const modalExpectedOutcome =
+    selectedProjectForModal?.expectedResult ||
+    (Array.isArray(taskDetails?.brief) ? taskDetails.brief[1] : "") ||
+    "Expected outcome and verification requirements provided by project owner.";
+  const modalSkillsList =
     taskDetails?.stack && taskDetails.stack.length > 0
       ? taskDetails.stack
-      : activeProject.skills || [];
-  const repoName =
-    taskDetails?.repo?.name ||
-    activeProject.github?.repoName ||
-    "codebridge/payments-service";
-  const commitHash =
-    taskDetails?.repo?.commit ||
-    activeProject.github?.commitHash ||
-    "c4b2a8f";
-
-  // Dynamic acceptance criteria from real backend task or expectedResult
-  const criteriaList: string[] =
+      : selectedProjectForModal?.skills && selectedProjectForModal.skills.length > 0
+      ? selectedProjectForModal.skills
+      : ["Python", "FastAPI"];
+  const modalCriteriaList: string[] =
     taskDetails?.criteria && taskDetails.criteria.length > 0
-      ? taskDetails.criteria.map((c) => c.text)
-      : expectedOutcome
-        ? [expectedOutcome]
-        : [];
+      ? taskDetails.criteria.map((c) => (typeof c === "string" ? c : c.text))
+      : [
+          selectedProjectForModal?.expectedResult ||
+            "All test assertions pass cleanly with zero regression.",
+        ];
 
-  const { formattedDate, relativeText, isOverdue } = getDisplayDeadline(activeProject.deadline);
+  const modalDeadlineInfo = getDisplayDeadline(selectedProjectForModal?.deadline);
+  const modalAmountFormatted = selectedProjectForModal
+    ? formatCurrencyINR(selectedProjectForModal.budget)
+    : "₹0";
+  const modalRepoName =
+    taskDetails?.repo?.name ||
+    selectedProjectForModal?.github?.repoName ||
+    "codebridge/payments-service";
+  const modalCommitHash =
+    taskDetails?.repo?.commit ||
+    selectedProjectForModal?.github?.commitHash ||
+    "c8f492b";
 
-  // Escrow state from real payment service or project record
-  const currentEscrowState: EscrowStepKey =
-    escrowData?.state === "held" || activeProject.escrowState === "held"
-      ? "held"
-      : escrowData?.state === "authorized" || activeProject.escrowState === "authorized"
-        ? "authorized"
-        : escrowData?.state === "released" || activeProject.escrowState === "released"
-          ? "released"
-          : "held";
+  const isModalTaskAccepted =
+    taskAcceptedMap[modalTaskId] ||
+    selectedProjectForModal?.projectState === "in_progress";
+  const isModalTaskDeclined = taskDeclinedMap[modalTaskId] || false;
 
-  const budgetAmount = escrowData?.amount || activeProject.budget || 0;
+  const modalMatch = selectedProjectForModal
+    ? computeSkillMatch(selectedProjectForModal, userSkills)
+    : { matched: false, matchedSkills: [] as string[], matchPercentage: 0 };
 
   return (
-    <div className="flex-1 overflow-y-auto bg-canvas">
-      {/* Screen-reader live region */}
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
+    <div className="flex-1 overflow-y-auto bg-canvas text-ink min-h-screen">
+      {/* Live announcement region for accessibility */}
+      <div aria-live="polite" className="sr-only">
         {liveAnnouncement}
       </div>
 
-      <div className="max-w-[1120px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
-        {/* Main 2-column layout (fluid main + sticky sidebar) */}
-        <div className="flex flex-col lg:flex-row items-start gap-8 lg:gap-12">
-          {/* Main Task Note Box (fluid, max 720px) */}
-          <main className="w-full lg:max-w-[720px] flex-1 order-2 lg:order-1">
-            <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8 shadow-sm space-y-6">
-              {/* Note Header Bar: Breadcrumb + Skill Match Pill */}
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-line">
-                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted">
-                  {/* TODO(route): link to all tasks list view */}
-                  <a
-                    href="#tasks"
-                    className="hover:text-ink transition-colors"
-                    onClick={(e) => {
-                      e.preventDefault();
-                    }}
+      <div className="max-w-[1120px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 space-y-8">
+        {/* Page Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-6 border-b border-line">
+          <div className="space-y-1">
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold tracking-tight text-ink">
+                Tasks Radar
+              </h1>
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-xs font-semibold bg-surface border border-line text-muted">
+                <Layers className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                <span>{sortedProjects.length} Tasks available</span>
+              </span>
+            </div>
+            <p className="text-sm text-muted">
+              Inspect objective acceptance criteria, review escrow guarantees, and accept tasks matching your tech stack.
+            </p>
+          </div>
+
+          {userSkills.length > 0 && (
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-surface border border-line text-xs">
+              <Sparkles className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <span className="text-muted">Matched with your skills:</span>
+              <span className="font-semibold text-ink font-mono">
+                {userSkills.slice(0, 3).join(", ")}
+                {userSkills.length > 3 ? ` +${userSkills.length - 3}` : ""}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Small Boxes Grid: Multiple projects displayed at once */}
+        <section aria-label="Available projects grid">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {sortedProjects.map((project) => {
+              const match = computeSkillMatch(project, userSkills);
+              const deadline = getDisplayDeadline(project.deadline);
+              const isAccepted =
+                taskAcceptedMap[project.id] || project.projectState === "in_progress";
+
+              return (
+                <div
+                  key={project.id}
+                  className="rounded-2xl border border-line bg-surface p-5 sm:p-6 shadow-sm hover:border-primary/50 transition-all flex flex-col justify-between space-y-5"
+                >
+                  {/* Card Top Header: Amount & Match */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="text-xs text-muted block font-medium">Fixed price</span>
+                      <span className="text-2xl font-bold tabular-nums text-ink">
+                        {formatCurrencyINR(project.budget)}
+                      </span>
+                    </div>
+
+                    {match.matched && match.matchPercentage > 0 && (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-success-bg text-success border border-success-border">
+                        <Sparkles className="h-3 w-3" aria-hidden="true" />
+                        <span>{match.matchPercentage}% Match</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Card Body: Title & Problem Context */}
+                  <div className="space-y-2 flex-1">
+                    <h2 className="text-base font-semibold text-ink line-clamp-2">
+                      {project.title}
+                    </h2>
+                    <p className="text-xs text-muted line-clamp-2 leading-relaxed">
+                      {project.description || "Objective specification provided by client."}
+                    </p>
+                  </div>
+
+                  {/* Tech Stack Chips */}
+                  {project.skills && project.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {project.skills.slice(0, 3).map((skill) => {
+                        const isMatched = userSkills.some(
+                          (us) => us.trim().toLowerCase() === skill.trim().toLowerCase()
+                        );
+                        return (
+                          <span
+                            key={skill}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-mono border ${
+                              isMatched
+                                ? "bg-success-bg text-success border-success-border font-semibold"
+                                : "bg-canvas text-muted border-line"
+                            }`}
+                          >
+                            {skill}
+                          </span>
+                        );
+                      })}
+                      {project.skills.length > 3 && (
+                        <span className="text-[11px] text-muted self-center">
+                          +{project.skills.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Card Footer Meta: Deadline & Escrow Status */}
+                  <div className="pt-3 border-t border-line/60 flex items-center justify-between text-xs text-muted">
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock className="h-3.5 w-3.5" aria-hidden="true" />
+                      <span>{deadline.formattedDate}</span>
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-success font-medium">
+                      <span className="h-1.5 w-1.5 rounded-full bg-success" />
+                      <span>Payment held</span>
+                    </span>
+                  </div>
+
+                  {/* Project Description Button at bottom of each box */}
+                  <Button
+                    variant={isAccepted ? "secondary" : "primary"}
+                    onClick={() => setSelectedProjectForModal(project)}
+                    className="w-full justify-center"
+                    aria-label={`Project Description for ${project.title}`}
                   >
-                    Tasks
-                  </a>
-                  <ChevronRight className="h-3 w-3 text-muted shrink-0" aria-hidden="true" />
-                  <span className="font-mono text-ink font-semibold">{taskId}</span>
-                </nav>
+                    <FileText className="h-4 w-4" aria-hidden="true" />
+                    <span>{isAccepted ? "View Workspace Scope" : "Project Description"}</span>
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      </div>
 
-                {/* Tech Stack Match Badge */}
-                {currentMatch.matchedSkills.length > 0 ? (
-                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-success-bg text-success border border-success-border">
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-                    <span>{currentMatch.matchPercentage}% Tech Stack Match</span>
-                  </div>
-                ) : userSkills.length > 0 ? (
-                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-raised text-muted border border-line">
-                    <span>Available Scope</span>
-                  </div>
-                ) : null}
-              </div>
+      {/* POPUP MODAL: Whole Project Description in details with Accept / Reject buttons */}
+      {selectedProjectForModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-overlay backdrop-blur-sm overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-task-title"
+        >
+          <div className="w-full max-w-5xl max-h-[92vh] overflow-y-auto rounded-2xl border border-line bg-surface p-6 sm:p-8 shadow-2xl relative space-y-6">
+            {/* Modal Top Header with Breadcrumbs & Close Button */}
+            <div className="flex items-center justify-between gap-4 pb-4 border-b border-line">
+              <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted">
+                <span>Tasks</span>
+                <span aria-hidden="true">/</span>
+                <span className="font-mono text-ink font-medium">{modalTaskId}</span>
+              </nav>
 
-              {/* Multi-Task Switcher Pill Strip (if multiple projects exist) */}
-              {sortedProjects.length > 1 && (
-                <div className="flex flex-wrap items-center gap-2 pb-1">
-                  <span className="text-[11px] font-mono text-muted uppercase tracking-wider font-semibold">
-                    Matching Tasks ({sortedProjects.length}):
+              <button
+                type="button"
+                onClick={() => setSelectedProjectForModal(null)}
+                className="p-1.5 rounded-lg border border-line text-muted hover:text-ink hover:bg-canvas transition-colors"
+                aria-label="Close dialog"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            {/* Personalized Match Banner inside Modal if applicable */}
+            {modalMatch.matched && modalMatch.matchedSkills.length > 0 && (
+              <div className="p-3.5 rounded-xl bg-success-bg border border-success-border text-xs text-success flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  <span>
+                    <strong>Recommended for your tech stack:</strong> matches your verified skills (
+                    {modalMatch.matchedSkills.join(", ")}).
                   </span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {sortedProjects.map((p) => {
-                      const isSelected = p.id === activeProject.id;
-                      const pMatch = computeSkillMatch(p, userSkills);
+                </div>
+                <span className="px-2 py-0.5 rounded-full bg-success text-on-primary font-bold text-[11px] shrink-0">
+                  {modalMatch.matchPercentage}% Stack Match
+                </span>
+              </div>
+            )}
+
+            {/* Modal Main 2-Column Content */}
+            <div className="flex flex-col lg:flex-row items-start gap-8 lg:gap-10">
+              {/* Left Column: Scope, Expectations, Done When, Stack */}
+              <div className="w-full lg:max-w-[620px] flex-1 space-y-6">
+                <div>
+                  <h1 id="modal-task-title" className="text-2xl font-bold tracking-tight text-ink">
+                    {modalTaskTitle}
+                  </h1>
+                  <p className="text-xs text-muted mt-1">
+                    Posted by {selectedProjectForModal.ownerName || "CodeBridge Project Owner"}
+                  </p>
+                </div>
+
+                <div className="h-px bg-line" aria-hidden="true" />
+
+                {/* What is broken */}
+                <section aria-labelledby="modal-heading-broken" className="space-y-2">
+                  <h2 id="modal-heading-broken" className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" />
+                    <span>What is broken</span>
+                  </h2>
+                  <div className="p-3.5 rounded-xl bg-canvas border border-line">
+                    <p className="text-sm leading-relaxed text-ink whitespace-pre-line">
+                      {modalProblemText}
+                    </p>
+                  </div>
+                </section>
+
+                {/* What the owner expects */}
+                <section aria-labelledby="modal-heading-expects" className="space-y-2">
+                  <h2 id="modal-heading-expects" className="text-sm font-semibold text-ink flex items-center gap-1.5">
+                    <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
+                    <span>What the owner expects</span>
+                  </h2>
+                  <div className="p-3.5 rounded-xl bg-canvas border border-line">
+                    <p className="text-sm leading-relaxed text-ink whitespace-pre-line">
+                      {modalExpectedOutcome}
+                    </p>
+                  </div>
+                </section>
+
+                {/* Done when (criteria) */}
+                <section aria-labelledby="modal-heading-criteria" className="space-y-2">
+                  <h2 id="modal-heading-criteria" className="text-sm font-semibold text-ink">
+                    Done when
+                  </h2>
+                  {modalCriteriaList.length > 0 ? (
+                    <ol className="space-y-2 list-decimal list-inside text-sm leading-relaxed text-ink p-3.5 rounded-xl bg-canvas border border-line">
+                      {modalCriteriaList.map((item, idx) => (
+                        <li key={idx} className="pl-1">
+                          <span>{item}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-sm text-muted">No specific criteria listed.</p>
+                  )}
+                </section>
+
+                {/* Stack */}
+                <section aria-labelledby="modal-heading-stack" className="space-y-2">
+                  <h2 id="modal-heading-stack" className="text-sm font-semibold text-ink">
+                    Stack
+                  </h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    {modalSkillsList.map((skill) => {
+                      const isMatchedSkill = userSkills.some(
+                        (us) => us.trim().toLowerCase() === skill.trim().toLowerCase()
+                      );
                       return (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => setSelectedProjectId(p.id)}
-                          className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
-                            isSelected
-                              ? "bg-primary text-on-primary font-bold shadow-xs"
-                              : "bg-canvas border border-line text-muted hover:text-ink"
+                        <span
+                          key={skill}
+                          className={`px-3 py-1 rounded-lg text-xs font-mono font-medium border flex items-center gap-1.5 ${
+                            isMatchedSkill
+                              ? "bg-success-bg text-success border-success-border font-bold"
+                              : "bg-canvas text-ink border-line"
                           }`}
                         >
-                          {pMatch.matched && userSkills.length > 0 && (
-                            <span
-                              className={`h-1.5 w-1.5 rounded-full ${
-                                isSelected ? "bg-on-primary" : "bg-success"
-                              }`}
-                            />
+                          {isMatchedSkill && <Check className="h-3 w-3" aria-hidden="true" />}
+                          <span>{skill}</span>
+                          {isMatchedSkill && (
+                            <span className="text-[10px] opacity-75 font-sans">(Matched)</span>
                           )}
-                          <span className="truncate max-w-[140px]">{p.title}</span>
-                        </button>
+                        </span>
                       );
                     })}
                   </div>
-                </div>
-              )}
+                  <p className="sr-only">{modalSkillsList.join(", ")}</p>
+                </section>
+              </div>
 
-              {/* Personalized Profile Match Recommendation Note */}
-              {currentMatch.matchedSkills.length > 0 && (
-                <div className="p-3.5 rounded-xl bg-info-bg/40 border border-info-border text-xs text-primary flex items-start gap-2.5">
-                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-primary" aria-hidden="true" />
-                  <div className="space-y-0.5">
-                    <p className="font-semibold text-ink">
-                      Tailored to your developer tech stack
-                    </p>
-                    <p className="text-muted leading-relaxed">
-                      This task requires <strong>{currentMatch.matchedSkills.join(", ")}</strong>, matching your verified freelancer skills.
-                    </p>
+              {/* Right Column: Escrow, Payment, Action Buttons & Details */}
+              <aside className="w-full lg:w-[320px] rounded-2xl border border-line bg-canvas p-5 space-y-6">
+                {/* Amount */}
+                <div className="space-y-1">
+                  <span className="text-xs text-muted block font-medium">Fixed price</span>
+                  <div className="text-3xl font-bold tabular-nums text-ink">
+                    {modalAmountFormatted}
                   </div>
                 </div>
-              )}
 
-              {/* H1: Task Title in Sentence Case, without ID */}
-              <div>
-                <h1 className="text-[26px] sm:text-[28px] leading-[34px] font-bold text-ink text-left">
-                  {taskTitle}
-                </h1>
-                <p className="text-xs text-muted mt-1">
-                  Posted by <span className="font-medium text-ink">{activeProject.ownerName}</span>
-                </p>
-              </div>
+                {/* Simulated Payment & Escrow Status */}
+                <div className="space-y-3 pt-2 border-t border-line">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-semibold text-ink">Payment held</span>
+                    {PAYMENT_MODE === "simulated" && (
+                      <span className="text-muted">Simulated payment - demo only</span>
+                    )}
+                  </div>
 
-              {/* 1px Divider */}
-              <div className="h-px bg-line" aria-hidden="true" />
+                  {/* Vertical 4-Stage Escrow Stepper */}
+                  <ul className="space-y-2.5 text-xs">
+                    {ESCROW_STEPS.map((step) => {
+                      const isHeld = step.key === "held";
+                      return (
+                        <li key={step.key} className="flex items-center gap-2.5">
+                          <span
+                            className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                              isHeld
+                                ? "bg-success"
+                                : "border border-line bg-surface"
+                            }`}
+                            aria-hidden="true"
+                          />
+                          <span
+                            className={
+                              isHeld
+                                ? "font-bold text-ink"
+                                : "text-muted"
+                            }
+                          >
+                            {step.label}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
 
-              {/* What is broken */}
-              <section aria-labelledby="heading-broken" className="space-y-2.5">
-                <h2 id="heading-broken" className="text-base font-semibold text-ink flex items-center gap-2">
-                  <AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" />
-                  <span>What is broken</span>
-                </h2>
-                <div className="p-3.5 rounded-xl bg-canvas border border-line/60">
-                  <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line font-mono text-xs sm:text-sm">
-                    {problemText}
+                  <p className="text-[11px] text-muted leading-relaxed">
+                    Released after your tests pass and the owner approves.
                   </p>
                 </div>
-              </section>
 
-              {/* 1px Divider */}
-              <div className="h-px bg-line" aria-hidden="true" />
-
-              {/* What the owner expects */}
-              <section aria-labelledby="heading-expects" className="space-y-2.5">
-                <h2 id="heading-expects" className="text-base font-semibold text-ink flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
-                  <span>What the owner expects</span>
-                </h2>
-                <div className="p-3.5 rounded-xl bg-canvas border border-line/60">
-                  <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line">
-                    {expectedOutcome}
-                  </p>
-                </div>
-              </section>
-
-              {/* 1px Divider */}
-              <div className="h-px bg-line" aria-hidden="true" />
-
-              {/* Done when (Acceptance criteria) */}
-              <section aria-labelledby="heading-criteria" className="space-y-2.5">
-                <h2 id="heading-criteria" className="text-base font-semibold text-ink">
-                  Done when
-                </h2>
-                {criteriaList.length > 0 ? (
-                  <ol className="space-y-2 list-decimal list-inside text-sm leading-[22px] text-ink p-3.5 rounded-xl bg-canvas border border-line/60">
-                    {criteriaList.map((item, idx) => (
-                      <li key={idx} className="pl-1">
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ol>
-                ) : (
-                  <p className="text-sm text-muted">No criteria specified.</p>
-                )}
-              </section>
-
-              {/* 1px Divider */}
-              <div className="h-px bg-line" aria-hidden="true" />
-
-              {/* Stack */}
-              <section aria-labelledby="heading-stack" className="space-y-2.5">
-                <h2 id="heading-stack" className="text-base font-semibold text-ink">
-                  Stack
-                </h2>
-                <div className="flex flex-wrap items-center gap-2">
-                  {skillsList.map((skill) => {
-                    const isMatchedSkill = userSkills.some(
-                      (us) => us.trim().toLowerCase() === skill.trim().toLowerCase()
-                    );
-                    return (
-                      <span
-                        key={skill}
-                        className={`px-3 py-1 rounded-lg text-xs font-mono font-medium border flex items-center gap-1.5 ${
-                          isMatchedSkill
-                            ? "bg-success-bg text-success border-success-border font-bold"
-                            : "bg-canvas text-ink border-line"
-                        }`}
+                {/* Action Buttons: Accept / Decline / Open Workspace */}
+                <div className="space-y-3 pt-2 border-t border-line">
+                  {isModalTaskDeclined ? (
+                    <div className="space-y-2 text-center">
+                      <p className="text-xs text-muted">You declined this task.</p>
+                      <Button
+                        variant="secondary"
+                        onClick={() => handleReconsider(modalTaskId)}
+                        className="w-full justify-center text-xs"
                       >
-                        {isMatchedSkill && <Check className="h-3 w-3" aria-hidden="true" />}
-                        <span>{skill}</span>
-                        {isMatchedSkill && (
-                          <span className="text-[10px] opacity-75 font-sans">(Matched)</span>
-                        )}
-                      </span>
-                    );
-                  })}
-                </div>
-                {/* Accessible text version for test runner and screen readers */}
-                <p className="sr-only">{skillsList.join(", ")}</p>
-              </section>
-            </div>
-          </main>
-
-          {/* Sticky Sidebar: ONLY boxed surface (1px border, 6px radius, 20px padding) */}
-          <aside
-            aria-label="Task acceptance details"
-            className="w-full lg:w-[320px] shrink-0 border border-line rounded-md p-5 bg-surface lg:sticky lg:top-6 space-y-5 order-1 lg:order-2"
-          >
-            {/* Amount & Fixed price */}
-            <div>
-              <div className="text-[32px] font-semibold text-ink leading-tight tabular-nums">
-                {formatCurrencyINR(budgetAmount)}
-              </div>
-              <div className="text-xs text-muted mt-0.5">Fixed price</div>
-            </div>
-
-            {/* Payment state list (compact vertical list of 4 states) */}
-            <div className="space-y-3 pt-1">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-ink">Payment held</span>
-                {PAYMENT_MODE === "simulated" && (
-                  <span className="text-xs text-muted">Simulated payment - demo only</span>
-                )}
-              </div>
-
-              <div
-                className="space-y-2 text-xs"
-                role="list"
-                aria-label="Payment lifecycle stages"
-              >
-                {ESCROW_STEPS.map((step) => {
-                  const isCurrent = step.key === currentEscrowState;
-                  return (
-                    <div
-                      key={step.key}
-                      role="listitem"
-                      className="flex items-center gap-2"
-                    >
-                      {isCurrent ? (
-                        <span
-                          className="h-2 w-2 rounded-full bg-ok shrink-0 inline-block"
-                          aria-hidden="true"
-                        />
-                      ) : (
-                        <span
-                          className="h-2 w-2 rounded-full border border-line shrink-0 inline-block"
-                          aria-hidden="true"
-                        />
-                      )}
-                      <span
-                        className={
-                          isCurrent
-                            ? "font-semibold text-ink"
-                            : "text-muted"
-                        }
-                      >
-                        {step.label}
-                      </span>
-                      {isCurrent && (
-                        <span className="sr-only">(current status)</span>
-                      )}
+                        Reconsider task
+                      </Button>
                     </div>
-                  );
-                })}
-              </div>
-
-              <p className="text-xs text-muted leading-normal">
-                Released after your tests pass and the owner approves.
-              </p>
-            </div>
-
-            {/* Actions: Accept / Decline / Ask question OR Open workspace */}
-            <div className="space-y-2 pt-1">
-              {taskDeclined ? (
-                <div className="space-y-2">
-                  <div className="text-xs text-muted p-2 rounded bg-canvas border border-line">
-                    You have declined this task.
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleReconsider}
-                    className="w-full text-xs text-primary hover:underline py-1 font-medium text-left"
-                  >
-                    Reconsider this task
-                  </button>
-                </div>
-              ) : taskAccepted ? (
-                <button
-                  type="button"
-                  onClick={() => onOpenWorkspace(taskId)}
-                  className="w-full px-4 py-2.5 text-sm font-semibold text-on-primary bg-primary rounded-md hover:opacity-95 transition-opacity text-center shadow-none"
-                >
-                  Open workspace
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <button
-                    type="button"
-                    onClick={handleAccept}
-                    className="w-full px-4 py-2.5 text-sm font-semibold text-on-primary bg-primary rounded-md hover:opacity-95 transition-opacity text-center shadow-none"
-                  >
-                    Accept task
-                  </button>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      type="button"
-                      onClick={handleDecline}
-                      className="text-xs text-muted hover:text-ink transition-colors"
-                    >
-                      Decline
-                    </button>
-
-                    {/* TODO(backend): owner messaging feature */}
-                    <a
-                      href="#ask-owner"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        announce("Owner messaging is not yet connected to the backend.");
+                  ) : isModalTaskAccepted ? (
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        setSelectedProjectForModal(null);
+                        onOpenWorkspace(modalTaskId);
                       }}
-                      className="text-xs text-primary hover:underline"
+                      className="w-full justify-center"
                     >
-                      Ask the owner a question
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* 1px Divider */}
-            <div className="h-px bg-line" aria-hidden="true" />
-
-            {/* Details list in definition-list style */}
-            <dl className="space-y-2.5 text-xs">
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-muted shrink-0">Deadline</dt>
-                <dd className="text-right">
-                  <span className="text-ink">{formattedDate}</span>{" "}
-                  {isOverdue ? (
-                    <span className="text-danger font-semibold">({relativeText})</span>
+                      <span>Open workspace</span>
+                      <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                    </Button>
                   ) : (
-                    <span className="text-muted">({relativeText})</span>
+                    <div className="space-y-2.5">
+                      <Button
+                        variant="primary"
+                        onClick={() => handleAccept(modalTaskId)}
+                        className="w-full justify-center"
+                      >
+                        Accept task
+                      </Button>
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDecline(modalTaskId)}
+                          className="text-xs text-muted hover:text-ink transition-colors"
+                        >
+                          Decline
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => announce("Messaging is not yet configured for this project.")}
+                          className="text-xs text-primary hover:underline transition-all"
+                        >
+                          Ask the owner a question
+                        </button>
+                      </div>
+                    </div>
                   )}
-                </dd>
-              </div>
+                </div>
 
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-muted shrink-0">Task ID</dt>
-                <dd className="font-mono text-ink text-right">{taskId}</dd>
-              </div>
-
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-muted">Repository</dt>
-                <dd className="text-ink">
-                  <div>{repoName}</div>
-                  <div className="font-mono text-muted text-[11px]">{commitHash}</div>
-                  <div className="text-muted text-[11px] mt-0.5">
-                    Read-only. Opens in your workspace after you accept.
+                {/* Definition List: Metadata */}
+                <dl className="space-y-3 text-xs pt-4 border-t border-line">
+                  <div className="flex items-start justify-between gap-2">
+                    <dt className="text-muted shrink-0">Deadline</dt>
+                    <dd className="text-right">
+                      <span className={modalDeadlineInfo.isOverdue ? "text-danger font-medium" : "text-ink"}>
+                        {modalDeadlineInfo.formattedDate}
+                      </span>
+                      {modalDeadlineInfo.relativeText && (
+                        <span className={`block text-[11px] ${modalDeadlineInfo.isOverdue ? "text-danger font-semibold" : "text-muted"}`}>
+                          ({modalDeadlineInfo.relativeText})
+                        </span>
+                      )}
+                    </dd>
                   </div>
-                </dd>
-              </div>
 
-              <div className="flex items-baseline justify-between gap-2">
-                <dt className="text-muted shrink-0">Status</dt>
-                <dd className="text-ink font-medium capitalize">
-                  {taskAccepted
-                    ? "In progress"
-                    : taskDeclined
-                      ? "Declined"
-                      : "Available"}
-                </dd>
-              </div>
+                  <div className="flex items-start justify-between gap-2">
+                    <dt className="text-muted shrink-0">Task ID</dt>
+                    <dd className="font-mono text-[11px] text-ink text-right break-all">
+                      {modalTaskId}
+                    </dd>
+                  </div>
 
-              {/* TODO(backend): owner rating */}
-              {/* TODO(backend): estimated hours */}
-              {/* TODO(backend): payout after fee */}
-            </dl>
-          </aside>
-        </div>
-      </div>
+                  <div className="space-y-1">
+                    <dt className="text-muted">Repository</dt>
+                    <dd className="text-ink">
+                      <span className="font-mono text-[11px] block">{modalRepoName}</span>
+                      <span className="font-mono text-[11px] text-muted block">{modalCommitHash}</span>
+                      <span className="text-[11px] text-muted block leading-tight mt-0.5">
+                        Read-only. Opens in your workspace after you accept.
+                      </span>
+                    </dd>
+                  </div>
 
-      {/* Mobile Sticky Bottom Bar (<= 640px) */}
-      <div className="sm:hidden fixed bottom-0 left-0 right-0 p-3.5 border-t border-line bg-surface flex items-center justify-between z-40 pb-[max(0.875rem,env(safe-area-inset-bottom))] shadow-none">
-        <div>
-          <div className="text-lg font-semibold text-ink leading-tight tabular-nums">
-            {formatCurrencyINR(budgetAmount)}
+                  <div className="flex items-center justify-between gap-2">
+                    <dt className="text-muted">Status</dt>
+                    <dd className="font-medium text-ink">
+                      {isModalTaskAccepted ? "Assigned" : "Available"}
+                    </dd>
+                  </div>
+                </dl>
+              </aside>
+            </div>
           </div>
-          <div className="text-[11px] text-muted">Fixed price</div>
         </div>
-
-        <div>
-          {taskAccepted ? (
-            <button
-              type="button"
-              onClick={() => onOpenWorkspace(taskId)}
-              className="px-4 py-2 text-xs font-semibold text-on-primary bg-primary rounded-md"
-            >
-              Open workspace
-            </button>
-          ) : taskDeclined ? (
-            <button
-              type="button"
-              onClick={handleReconsider}
-              className="px-3 py-2 text-xs font-semibold text-primary border border-line rounded-md"
-            >
-              Reconsider
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleAccept}
-              className="px-4 py-2 text-xs font-semibold text-on-primary bg-primary rounded-md"
-            >
-              Accept task
-            </button>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 };

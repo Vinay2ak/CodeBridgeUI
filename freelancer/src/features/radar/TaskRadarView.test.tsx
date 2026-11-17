@@ -40,20 +40,40 @@ function renderWithClient(ui: React.ReactElement) {
   );
 }
 
-describe("TaskRadarView Redesign", () => {
+describe("TaskRadarView Grid & Details Popup", () => {
   beforeEach(() => {
     vi.spyOn(projectApi, "getProjects").mockResolvedValue([testProject]);
   });
 
-  it("renders unboxed main column with sentence case title and sections in order", async () => {
+  it("renders multiple project boxes with title, fixed price, and Project Description button", async () => {
     renderWithClient(<TaskRadarView onOpenWorkspace={vi.fn()} />);
+
+    // Available tasks grid header
+    expect(await screen.findByText("Tasks Radar")).toBeInTheDocument();
+    expect(screen.getByText(/Tasks available/i)).toBeInTheDocument();
+
+    // Project card box with Title & Fixed price
+    expect(screen.getByText("Fix payment callback webhook race condition & idempotency")).toBeInTheDocument();
+    expect(screen.getAllByText(/Fixed price/i).length).toBeGreaterThanOrEqual(1);
+
+    // Project Description button at bottom of box
+    const descBtn = screen.getByRole("button", { name: /Project Description/i });
+    expect(descBtn).toBeInTheDocument();
+  });
+
+  it("opens project description popup modal with sections and escrow in order", async () => {
+    renderWithClient(<TaskRadarView onOpenWorkspace={vi.fn()} />);
+
+    // Click Project Description button to expand popup
+    const descBtn = await screen.findByRole("button", { name: /Project Description/i });
+    fireEvent.click(descBtn);
 
     // Breadcrumb and Task ID
     const projElements = await screen.findAllByText(/proj_1024/i);
     expect(projElements.length).toBeGreaterThanOrEqual(1);
 
-    // H1 title without ID
-    const heading = screen.getByRole("heading", { level: 1 });
+    // H1 title in modal
+    const heading = screen.getByRole("heading", { level: 1, name: /Fix payment callback/i });
     expect(heading).toHaveTextContent("Fix payment callback webhook race condition & idempotency");
 
     // Headings in required order
@@ -61,42 +81,40 @@ describe("TaskRadarView Redesign", () => {
     expect(screen.getByText("What the owner expects")).toBeInTheDocument();
     expect(screen.getByText("Done when")).toBeInTheDocument();
     expect(screen.getByText("Stack")).toBeInTheDocument();
-  });
 
-  it("renders boxed sidebar with amount, 4-stage vertical escrow, and simulated payment note", async () => {
-    renderWithClient(<TaskRadarView onOpenWorkspace={vi.fn()} />);
-
-    expect((await screen.findAllByText(/Fixed price/i)).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Payment held/i)).toBeInTheDocument();
+    // 4 Escrow steps & simulated payment note
+    expect(screen.getAllByText(/Payment held/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText(/Simulated payment - demo only/i)).toBeInTheDocument();
-
-    // 4 Escrow steps
     expect(screen.getByText("Authorized")).toBeInTheDocument();
     expect(screen.getByText("Held")).toBeInTheDocument();
     expect(screen.getByText("Release pending")).toBeInTheDocument();
     expect(screen.getByText("Released")).toBeInTheDocument();
   });
 
-  it("handles accept and decline workflows cleanly", async () => {
+  it("handles accept and decline workflows cleanly inside modal", async () => {
     const onOpenWorkspace = vi.fn();
     renderWithClient(<TaskRadarView onOpenWorkspace={onOpenWorkspace} />);
 
-    // Before accept: Accept task buttons (desktop + mobile) + Decline + Ask question
-    const acceptBtns = await screen.findAllByRole("button", { name: "Accept task" });
+    // Open modal
+    const descBtn = await screen.findByRole("button", { name: /Project Description/i });
+    fireEvent.click(descBtn);
+
+    // Accept task button & Decline button
+    const acceptBtn = screen.getByRole("button", { name: "Accept task" });
     const declineBtn = screen.getByRole("button", { name: "Decline" });
-    expect(acceptBtns.length).toBeGreaterThanOrEqual(1);
+    expect(acceptBtn).toBeInTheDocument();
     expect(declineBtn).toBeInTheDocument();
     expect(screen.getByText("Ask the owner a question")).toBeInTheDocument();
 
-    // Click desktop Accept task
-    fireEvent.click(acceptBtns[0]);
+    // Click Accept task
+    fireEvent.click(acceptBtn);
 
     // Transitions to Open workspace
-    const openWorkspaceBtns = screen.getAllByRole("button", { name: "Open workspace" });
-    expect(openWorkspaceBtns.length).toBeGreaterThanOrEqual(1);
+    const openWorkspaceBtn = screen.getByRole("button", { name: "Open workspace" });
+    expect(openWorkspaceBtn).toBeInTheDocument();
 
     // Clicking Open workspace invokes callback
-    fireEvent.click(openWorkspaceBtns[0]);
+    fireEvent.click(openWorkspaceBtn);
     expect(onOpenWorkspace).toHaveBeenCalledWith("proj_1024");
   });
 });
