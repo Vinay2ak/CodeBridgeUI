@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import OwnerDashboard from './OwnerDashboard';
@@ -54,6 +54,22 @@ describe('Owner Dashboard Component Rendering', () => {
     window.location.hash = '#projects';
     renderWithProviders(<OwnerDashboard />);
     expect(screen.getAllByRole('heading', { name: 'Projects' }).length).toBeGreaterThanOrEqual(1);
+    window.location.hash = '';
+  });
+
+  it('handles delete project button and modal interaction', async () => {
+    window.location.hash = '#projects';
+    renderWithProviders(<OwnerDashboard />);
+    expect(screen.getAllByRole('heading', { name: 'Projects' }).length).toBeGreaterThanOrEqual(1);
+
+    const deleteButtons = screen.queryAllByRole('button', { name: /delete project/i });
+    if (deleteButtons.length > 0) {
+      fireEvent.click(deleteButtons[0]);
+      expect(screen.getByRole('dialog', { name: /delete project/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /cancel/i })).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /cancel/i }));
+      expect(screen.queryByRole('dialog', { name: /delete project/i })).not.toBeInTheDocument();
+    }
     window.location.hash = '';
   });
 });

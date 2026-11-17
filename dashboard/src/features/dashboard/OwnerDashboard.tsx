@@ -6,12 +6,17 @@ import {
   Eye,
   BadgeCheck,
   Plus,
+  Trash2,
 } from 'lucide-react';
 import {
   useProjectsQuery,
   usePaymentsSummaryQuery,
   useNotificationsQuery,
+  queryKeys,
 } from './hooks';
+import { useQueryClient } from '@tanstack/react-query';
+import { useToast } from '../../components/ui/Toast';
+import { deleteProject } from '../../services/project/api';
 import { KpiCard } from '../../components/dashboard/KpiCard';
 import { Panel } from '../../components/dashboard/Panel';
 import { DataTable, Column } from '../../components/dashboard/DataTable';
@@ -57,6 +62,34 @@ export const OwnerDashboard: React.FC = () => {
   const projectsQuery = useProjectsQuery();
   const paymentsQuery = usePaymentsSummaryQuery();
   useNotificationsQuery();
+
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleConfirmDelete = async () => {
+    if (!projectToDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteProject(projectToDelete.id);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.projects });
+      addToast({
+        title: 'Project Deleted',
+        description: `"${projectToDelete.title}" has been deleted.`,
+        type: 'success',
+      });
+      setProjectToDelete(null);
+    } catch (err: any) {
+      addToast({
+        title: 'Failed to Delete Project',
+        description: err?.detail || err?.message || 'Could not delete project. Please try again.',
+        type: 'error',
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   const projects = projectsQuery.data?.items || [];
   const paymentsSummary = paymentsQuery.data;
@@ -128,6 +161,24 @@ export const OwnerDashboard: React.FC = () => {
         <span className="text-xs text-text-muted">
           {formatRelativeTime(p.updatedAt)}
         </span>
+      ),
+    },
+    {
+      header: 'Actions',
+      accessor: (p) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setProjectToDelete(p);
+          }}
+          className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-danger hover:text-on-primary hover:bg-danger rounded border border-danger/30 transition-colors cursor-pointer"
+          title={`Delete project "${p.title}"`}
+          aria-label={`Delete project ${p.title}`}
+        >
+          <Trash2 className="w-3.5 h-3.5" />
+          <span>Delete</span>
+        </button>
       ),
     },
   ];
@@ -335,6 +386,59 @@ export const OwnerDashboard: React.FC = () => {
           projectsQuery.refetch();
         }}
       />
+
+      {/* Delete Confirmation Modal */}
+      {projectToDelete && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-project-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-lg bg-surface border border-border p-6 shadow-2xl flex flex-col gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-danger/15 text-danger flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 id="delete-project-title" className="text-base font-bold text-text">
+                  Delete Project
+                </h3>
+                <p className="text-xs text-text-muted mt-0.5">
+                  Are you sure you want to delete this project?
+                </p>
+              </div>
+            </div>
+
+            <p className="text-sm text-text">
+              This will permanently delete{' '}
+              <span className="font-semibold text-text">
+                &ldquo;{projectToDelete.title}&rdquo;
+              </span>
+              . This action cannot be undone.
+            </p>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setProjectToDelete(null)}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting…' : 'Delete Project'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

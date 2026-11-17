@@ -494,6 +494,34 @@ export const projectHandlers = [
     );
   }),
 
+  // 4b-del. Project: DELETE /projects/:id
+  http.delete('*/api/v1/projects/:id', async ({ params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+    const id = String(params.id);
+    const stored = getStoredProjects();
+    const filtered = stored.filter((p) => p.id !== id);
+    saveStoredProjects(filtered);
+    return HttpResponse.json({ success: true, id }, {
+      status: 200,
+      headers: { 'X-Correlation-Id': corrId },
+    });
+  }),
+
+  // 4b-cancel. Project: POST /projects/:id/cancel
+  http.post('*/api/v1/projects/:id/cancel', async ({ params }) => {
+    await applyRandomLatency();
+    const corrId = generateCorrelationId();
+    const id = String(params.id);
+    const stored = getStoredProjects();
+    const filtered = stored.filter((p) => p.id !== id);
+    saveStoredProjects(filtered);
+    return HttpResponse.json({ success: true, id, status: 'CANCELLED' }, {
+      status: 200,
+      headers: { 'X-Correlation-Id': corrId },
+    });
+  }),
+
   // 4c. Project: POST /projects (Post a Project by Owner)
   http.post('*/api/v1/projects', async ({ request }) => {
     await applyRandomLatency();

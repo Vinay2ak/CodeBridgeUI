@@ -42,10 +42,24 @@ export const projectApi = {
   removeShortlist: async (projectId: string, freelancerId: string): Promise<void> => {
     await http.delete(`/api/v1/projects/${projectId}/shortlist/${freelancerId}`);
   },
+
+  deleteProject: async (id: string): Promise<void> => {
+    try {
+      await http.delete(`/api/v1/projects/${id}`);
+    } catch (err: any) {
+      // Fall back to cancel endpoint if DELETE is not supported by gateway route
+      try {
+        await http.post(`/api/v1/projects/${id}/cancel`);
+      } catch {
+        throw err;
+      }
+    }
+  },
 };
 
 export const getProjects = projectApi.getProjects;
 export const getProject = projectApi.getProject;
 export const createProject = projectApi.createProject;
+export const deleteProject = projectApi.deleteProject;
 export const addShortlist = projectApi.addShortlist;
 export const removeShortlist = projectApi.removeShortlist;
