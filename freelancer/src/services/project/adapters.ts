@@ -146,9 +146,9 @@ export function adaptProjectScope(p: any): ProjectScope {
  */
 export function adaptWorkspaceContainerInfo(raw: any, projectId: string): WorkspaceContainerInfo {
   const workspaceId = String(raw.workspace_id || raw.workspaceId || `ws-${projectId}`);
-  const containerId = String(raw.container_id || raw.containerId || `cb-cnt-${Math.floor(10000 + Math.random() * 90000)}`);
+  const containerId = String(raw.container_id || raw.containerId || "");
   const state = adaptDockerWorkspaceState(raw.status || raw.state);
-  const image = String(raw.image || raw.image_tag || "codebridge/runner:python3.11");
+  const image = String(raw.image || raw.image_tag || "codebridge/runner:latest");
 
   return {
     workspaceId,
@@ -156,9 +156,9 @@ export function adaptWorkspaceContainerInfo(raw: any, projectId: string): Worksp
     state,
     image,
     containerId,
-    isolationLevel: "gVisor Hardened (Kata Containers)",
-    githubMount: `/workspace/${projectId} (read-only)`,
-    connectCommand: `docker run -it --rm -v $(pwd):/workspace -e TASK_ID=${projectId} ${image} pytest tests/test_payment_callback.py`,
+    isolationLevel: raw.isolation_level || raw.isolationLevel || "gVisor Hardened (Kata Containers)",
+    githubMount: raw.mount || `/workspace/${projectId} (read-only)`,
+    connectCommand: raw.connect_command || `docker run -it --rm -v $(pwd):/workspace -e TASK_ID=${projectId} ${image}`,
     createdAt: String(raw.created_at || raw.createdAt || new Date().toISOString()),
     lastActiveAt: raw.last_active_at || raw.lastActiveAt,
   };

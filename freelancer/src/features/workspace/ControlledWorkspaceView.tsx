@@ -40,15 +40,9 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
   const [copiedDockerCmd, setCopiedDockerCmd] = useState(false);
 
   // Form state for structured submission
-  const [solutionSummary, setSolutionSummary] = useState(
-    "Added Redis distributed lock pattern to callback endpoint, preventing concurrent transaction race conditions. Enforced database row locking with SELECT ... FOR UPDATE and persisted transaction idempotency keys for 24h."
-  );
-  const [filesModified, setFilesModified] = useState(
-    "app/api/v1/endpoints/payments.py\napp/services/payment_service.py\ntests/test_payment_callback.py"
-  );
-  const [reviewerNotes, setReviewerNotes] = useState(
-    "Verified all callback race condition tests locally using concurrent async test workers. Passed with 0 warnings."
-  );
+  const [solutionSummary, setSolutionSummary] = useState("");
+  const [filesModified, setFilesModified] = useState("");
+  const [reviewerNotes, setReviewerNotes] = useState("");
   const [submitSuccessMsg, setSubmitSuccessMsg] = useState<string | null>(null);
 
   // Fetch Project details
@@ -113,12 +107,25 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
     },
   });
 
-  const currentProject = project || {
-    id: projectId,
-    title: "Fix payment callback webhook race condition",
-    projectState: "in_progress" as const,
-    escrowState: "held" as const,
-    budget: 5000,
+  const currentProject: ProjectScope = project || {
+    id: projectId || "active-task",
+    title: "Project Workspace",
+    description: "",
+    expectedResult: "",
+    budget: 0,
+    currency: "INR",
+    deadline: "",
+    skills: [],
+    ownerName: "Client",
+    projectState: "in_progress",
+    escrowState: "held",
+    github: {
+      status: "connected",
+      repoName: "workspace-repo",
+      defaultBranch: "main",
+      commitHash: "head",
+      accessLevel: "Controlled Read-Only (No Owner Password Shared)",
+    },
   };
 
   const projectStates = [
@@ -136,7 +143,9 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
 
   const dockerCliCmd =
     workspace?.connectCommand ||
-    `docker run -it --rm -v $(pwd):/workspace -e TASK_ID=${projectId} codebridge/runner:python3.11 pytest tests/test_payment_callback.py`;
+    (projectId
+      ? `docker run -it --rm -v $(pwd):/workspace -e TASK_ID=${projectId} codebridge/runner:latest`
+      : "docker run -it --rm -v $(pwd):/workspace codebridge/runner:latest");
 
   const handleCopyDocker = () => {
     navigator.clipboard.writeText(dockerCliCmd);
@@ -222,7 +231,11 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
               <div className="flex items-center gap-2">
                 <div className="px-2.5 py-1 rounded-md text-xs font-semibold bg-success-bg text-success border border-success-border flex items-center gap-1.5">
                   <ShieldCheck className="h-3.5 w-3.5" />
-                  <span>₹5,000 HELD IN ESCROW</span>
+                  <span>
+                    {currentProject.budget > 0
+                      ? `₹${currentProject.budget.toLocaleString()} ${currentProject.escrowState.replace(/_/g, " ").toUpperCase()}`
+                      : "ESCROW SECURED"}
+                  </span>
                 </div>
                 <span className="text-xs text-muted">
                   Auto-release triggered on test suite pass & owner approval
@@ -239,7 +252,8 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-warning">Revision Feedback Received from Project Owner</h3>
               <p className="text-xs text-muted">
-                "Please add test coverage for high-volume retry bursts where 50 requests arrive concurrently with the same idempotency key. Ensure no database connection leak occurs during timeout."
+                {currentProject.changesRequestedNote ||
+                  "Changes were requested by the project owner. Please review feedback, update your code, and re-run tests."}
               </p>
               <div className="text-xs font-medium text-warning pt-1">
                 Action required: Modify code, run test suite checks below, and re-submit your updated solution.
@@ -276,7 +290,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                     : "bg-surface text-muted border border-line"
                 }`}
               >
-                {workspace?.state || "active"}
+                {workspace?.state || "idle"}
               </span>
             </div>
           </div>
@@ -285,11 +299,11 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
             <div className="p-2.5 rounded-lg bg-raised border border-line">
               <span className="text-muted block text-[10px] uppercase font-mono">Container ID</span>
-              <span className="font-mono font-bold text-ink">{workspace?.containerId || "cb-cnt-90214"}</span>
+              <span className="font-mono font-bold text-ink">{workspace?.containerId || "Not initialized"}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-raised border border-line">
               <span className="text-muted block text-[10px] uppercase font-mono">Image Tag</span>
-              <span className="font-mono text-ink truncate block">{workspace?.image || "codebridge/runner:python3.11"}</span>
+              <span className="font-mono text-ink truncate block">{workspace?.image || "codebridge/runner:latest"}</span>
             </div>
             <div className="p-2.5 rounded-lg bg-raised border border-line">
               <span className="text-muted block text-[10px] uppercase font-mono">Isolation</span>
@@ -298,7 +312,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
             <div className="p-2.5 rounded-lg bg-raised border border-line">
               <span className="text-muted block text-[10px] uppercase font-mono">Mount</span>
               <span className="font-mono text-ink truncate block">
-                {workspace?.githubMount || "/workspace (read-only)"}
+                {workspace?.githubMount || (projectId ? `/workspace/${projectId}` : "—")}
               </span>
             </div>
           </div>
@@ -507,7 +521,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                 rows={3}
                 required
                 className="w-full text-xs rounded-lg border border-line bg-canvas p-2.5 text-ink focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                placeholder="Explain the architectural changes and race condition fixes implemented..."
+                placeholder="Describe your technical implementation, architectural decisions, and bug fixes..."
               />
             </div>
 
@@ -522,7 +536,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                 rows={3}
                 required
                 className="w-full text-xs rounded-lg border border-line bg-canvas p-2.5 text-ink focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-                placeholder="app/api/v1/payments.py..."
+                placeholder="e.g. src/api/endpoints.py (one per line)"
               />
             </div>
 
@@ -540,7 +554,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                   )}
                   <span className="font-mono text-ink">
                     {testResult?.passed
-                      ? `pytest tests/test_payment_callback.py — PASSED (Exit Code: 0)`
+                      ? `Automated Verification Checks — PASSED (Exit Code: ${testResult.exitCode ?? 0})`
                       : "No passing test run recorded. Click 'Run Required Project Checks' above."}
                   </span>
                 </div>
@@ -562,7 +576,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                 onChange={(e) => setReviewerNotes(e.target.value)}
                 rows={2}
                 className="w-full text-xs rounded-lg border border-line bg-canvas p-2.5 text-ink focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Any special testing flags or local deployment steps..."
+                placeholder="Optional notes, verification instructions, or testing details for the project owner..."
               />
             </div>
 
@@ -589,11 +603,11 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
           </form>
 
           {/* Submission History Timeline */}
-          {submissions && submissions.length > 0 && (
-            <div className="pt-4 border-t border-line space-y-3">
-              <span className="text-xs font-semibold uppercase tracking-wider text-muted">
-                Submission & Review History
-              </span>
+          <div className="pt-4 border-t border-line space-y-3">
+            <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+              Submission & Review History
+            </span>
+            {submissions && submissions.length > 0 ? (
               <div className="space-y-2">
                 {submissions.map((sub) => (
                   <div
@@ -628,8 +642,12 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="p-4 rounded-lg bg-raised border border-line text-xs text-muted text-center">
+                No submissions recorded yet for this project. Completed submissions and reviewer feedback will appear here in real time.
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

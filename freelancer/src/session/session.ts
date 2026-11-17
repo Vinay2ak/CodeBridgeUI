@@ -246,9 +246,8 @@ class SessionStore {
 
           if (urlToken || urlRt || urlUser) {
             const newQuery = urlParams.toString();
-            const cleanUrl = `${window.location.pathname}${
-              newQuery ? `?${newQuery}` : ""
-            }`;
+            const cleanUrl = `${window.location.pathname}${newQuery ? `?${newQuery}` : ""
+              }`;
             window.history.replaceState({}, "", cleanUrl);
           }
 
