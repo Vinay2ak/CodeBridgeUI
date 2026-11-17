@@ -20,6 +20,27 @@ export function configureHttpAuth(
   refreshSessionFn = refreshToken;
 }
 
+export function resolveApiUrl(endpoint: string): string {
+  if (endpoint.startsWith("http://") || endpoint.startsWith("https://")) {
+    return endpoint;
+  }
+  const base = (env.apiBaseUrl || "/api/v1").replace(/\/$/, "");
+
+  // If endpoint already starts with base (e.g. /api/v1/projects)
+  if (endpoint.startsWith(base)) {
+    return endpoint;
+  }
+
+  // If endpoint starts with /api/ (e.g. /api/v1 or any /api/ route)
+  if (endpoint.startsWith("/api/")) {
+    return endpoint;
+  }
+
+  // Otherwise cleanly prepend base
+  const cleanEndpoint = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+  return `${base}${cleanEndpoint}`;
+}
+
 export async function request<T = unknown>(
   endpoint: string,
   options: RequestOptions = {}
@@ -29,9 +50,7 @@ export async function request<T = unknown>(
   const timeoutMs = options.timeoutMs ?? 10000;
   const isRetry = options._isRetry ?? false;
 
-  const url = endpoint.startsWith("http")
-    ? endpoint
-    : `${env.apiBaseUrl}${endpoint.startsWith("/") ? "" : "/"}${endpoint}`;
+  const url = resolveApiUrl(endpoint);
 
   const headers = new Headers(options.headers || {});
   if (!headers.has("Content-Type") && options.body && typeof options.body === "string") {
@@ -105,7 +124,13 @@ export async function request<T = unknown>(
     at: new Date().toISOString(),
   });
 
-  if (response.status === 401 && !isRetry) {
+  if (
+    response.status === 401 &&
+    !isRetry &&
+    !options.skipAuth &&
+    !endpoint.includes("/auth/refresh") &&
+    !endpoint.includes("/auth/login")
+  ) {
     let errorCode = "";
     try {
       const cloned = response.clone();

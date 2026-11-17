@@ -16,7 +16,10 @@ export default defineConfig(({ mode }) => {
   const isHttps = gatewayUrl.startsWith("https://");
   const isLocal =
     gatewayUrl.startsWith("http://localhost") ||
-    gatewayUrl.startsWith("http://127.0.0.1");
+    gatewayUrl.startsWith("http://127.0.0.1") ||
+    gatewayUrl.startsWith("http://192.168.") ||
+    gatewayUrl.startsWith("http://10.") ||
+    gatewayUrl.startsWith("http://172.");
 
   // Tunnel skip headers
   const remoteHeaders = {

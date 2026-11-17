@@ -190,6 +190,31 @@ class SessionStore {
       try {
         let initialToken: string | null = this.state.accessToken;
 
+        // Check localStorage for persisted token or user
+        if (typeof localStorage !== "undefined") {
+          if (!initialToken) {
+            initialToken =
+              localStorage.getItem("cb_access_token") ||
+              localStorage.getItem("cb_token") ||
+              localStorage.getItem("access_token") ||
+              localStorage.getItem("token") ||
+              null;
+          }
+          if (!this.inMemoryRefreshToken) {
+            this.inMemoryRefreshToken =
+              localStorage.getItem("cb_refresh_token") ||
+              localStorage.getItem("refresh_token") ||
+              null;
+          }
+          const storedUser = localStorage.getItem("cb_user") || localStorage.getItem("user");
+          if (storedUser && !this.state.user) {
+            try {
+              const parsed = JSON.parse(storedUser);
+              this.setState({ user: parsed });
+            } catch {}
+          }
+        }
+
         // Check URL parameters for token handoff from auth service
         if (typeof window !== "undefined") {
           const urlParams = new URLSearchParams(window.location.search);
@@ -322,6 +347,20 @@ class SessionStore {
         }
 
         const expiresAt = Date.now() + expiresIn * 1000;
+
+        if (typeof localStorage !== "undefined") {
+          try {
+            if (accessToken) {
+              localStorage.setItem("cb_access_token", accessToken);
+            }
+            if (this.inMemoryRefreshToken) {
+              localStorage.setItem("cb_refresh_token", this.inMemoryRefreshToken);
+            }
+            if (user) {
+              localStorage.setItem("cb_user", JSON.stringify(user));
+            }
+          } catch {}
+        }
 
         this.setState({
           accessToken,
