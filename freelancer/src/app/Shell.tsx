@@ -10,6 +10,8 @@ import {
   Radio,
   Server,
   Award,
+  Menu as MenuIcon,
+  X,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
@@ -50,6 +52,7 @@ export const Shell: React.FC<ShellProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     currentTaskId || "proj_1024"
   );
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -88,24 +91,48 @@ export const Shell: React.FC<ShellProps> = ({
     }
   }, [currentTaskId]);
 
-  // Keyboard shortcut listener for Ctrl+Shift+D
+  // Keyboard shortcut listener for Ctrl+Shift+D and Escape for mobile menu
   useEffect(() => {
-    if (!env.devTools) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
+      if (e.key === "Escape" && isMobileMenuOpen) {
+        setIsMobileMenuOpen(false);
+      }
+      if (env.devTools && e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
         e.preventDefault();
         setDevDrawerOpen((prev) => !prev);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [isMobileMenuOpen]);
 
   const handleOpenWorkspace = (projectId: string) => {
     setSelectedProjectId(projectId);
     onSelectTask(projectId);
     setActiveView("workspace");
+    setIsMobileMenuOpen(false);
   };
+
+  const navItems = [
+    {
+      key: "radar" as const,
+      label: "Tasks",
+      icon: Radio,
+      description: "Inspect & accept scopes",
+    },
+    {
+      key: "workspace" as const,
+      label: "Workspace",
+      icon: Server,
+      description: "Docker test runner & submit",
+    },
+    {
+      key: "portfolio" as const,
+      label: "Portfolio",
+      icon: Award,
+      description: "Verified proofs & earnings",
+    },
+  ];
 
   const userMenuItems: MenuItem[] = [
     {
@@ -137,8 +164,47 @@ export const Shell: React.FC<ShellProps> = ({
     },
   ];
 
+  const sidebarNavigation = (
+    <nav aria-label="Freelancer sidebar navigation" className="space-y-1">
+      {navItems.map((item) => {
+        const isActive = activeView === item.key;
+        const IconComponent = item.icon;
+        return (
+          <button
+            key={item.key}
+            type="button"
+            onClick={() => {
+              setActiveView(item.key);
+              setIsMobileMenuOpen(false);
+            }}
+            aria-current={isActive ? "page" : undefined}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs rounded-lg transition-all text-left ${
+              isActive
+                ? "bg-primary/15 text-primary font-bold border-l-2 border-primary shadow-sm"
+                : "text-muted hover:text-ink hover:bg-raised font-medium"
+            }`}
+          >
+            <IconComponent
+              className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-muted"}`}
+              aria-hidden="true"
+            />
+            <div className="flex-1 min-w-0">
+              <span className="block truncate">{item.label}</span>
+              <span className="block text-[10px] text-muted truncate font-normal">
+                {item.description}
+              </span>
+            </div>
+            {isActive && (
+              <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
+
   return (
-    <div className="min-h-screen flex flex-col bg-canvas text-ink">
+    <div className="min-h-screen bg-canvas text-ink">
       {/* Skip to Content */}
       <a
         href="#main-content"
@@ -147,118 +213,198 @@ export const Shell: React.FC<ShellProps> = ({
         Skip to main content
       </a>
 
-      {/* Top Header Navbar */}
-      <header className="h-14 border-b border-line bg-surface px-4 flex items-center justify-between gap-4 shrink-0 z-30">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="flex items-center gap-2 shrink-0">
+      {/* Fixed Sidebar for Desktop (>= 1024px) */}
+      <aside
+        aria-label="Freelancer Sidebar Navigation"
+        className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-line lg:bg-surface z-30"
+      >
+        {/* Sidebar Header / Logo */}
+        <div className="flex h-14 items-center px-5 border-b border-line">
+          <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-info-bg border border-info-border flex items-center justify-center text-primary">
               <Code2 className="h-5 w-5" aria-hidden="true" />
             </div>
-            <span className="font-bold text-base tracking-tight text-ink">CodeBridge</span>
+            <div>
+              <span className="font-bold text-base tracking-tight text-ink block leading-none">
+                CodeBridge
+              </span>
+              <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mt-1">
+                Freelancer Portal
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Sidebar Navigation Items */}
+        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+          <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-muted font-bold">
+            Navigation
+          </div>
+          {sidebarNavigation}
+        </div>
+
+        {/* Sidebar Footer */}
+        <div className="p-3 border-t border-line space-y-2">
+          <button
+            type="button"
+            onClick={() => setShortcutsOpen(true)}
+            className="w-full flex items-center justify-between p-2 rounded-lg bg-raised border border-line text-[11px] text-muted hover:text-ink transition-colors font-mono"
+          >
+            <span className="flex items-center gap-2">
+              <Keyboard className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+              <span>Shortcuts</span>
+            </span>
+            <kbd className="px-1.5 py-0.5 rounded bg-surface border border-line text-[10px] text-primary">
+              Ctrl+Enter
+            </kbd>
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile Slide-Over Drawer (< 1024px) */}
+      {isMobileMenuOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Mobile navigation menu"
+          className="lg:hidden fixed inset-0 z-50 flex"
+        >
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-opacity"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+
+          {/* Drawer content */}
+          <div className="relative flex flex-col w-64 max-w-xs bg-surface border-r border-line shadow-2xl z-10">
+            <div className="flex h-14 items-center justify-between px-4 border-b border-line">
+              <div className="flex items-center gap-2.5">
+                <div className="h-8 w-8 rounded-lg bg-info-bg border border-info-border flex items-center justify-center text-primary">
+                  <Code2 className="h-5 w-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <span className="font-bold text-base tracking-tight text-ink block leading-none">
+                    CodeBridge
+                  </span>
+                  <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mt-1">
+                    Freelancer Portal
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileMenuOpen(false)}
+                aria-label="Close navigation menu"
+                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-raised transition-colors"
+              >
+                <X className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
+              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-muted font-bold">
+                Navigation
+              </div>
+              {sidebarNavigation}
+            </div>
+
+            <div className="p-3 border-t border-line">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsMobileMenuOpen(false);
+                  setShortcutsOpen(true);
+                }}
+                className="w-full flex items-center justify-between p-2 rounded-lg bg-raised border border-line text-[11px] text-muted hover:text-ink transition-colors font-mono"
+              >
+                <span className="flex items-center gap-2">
+                  <Keyboard className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
+                  <span>Shortcuts</span>
+                </span>
+                <kbd className="px-1.5 py-0.5 rounded bg-surface border border-line text-[10px] text-primary">
+                  Ctrl+Enter
+                </kbd>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Application Layout (Offset by w-64 on lg) */}
+      <div className="lg:pl-64 flex flex-col min-h-screen">
+        {/* Top Header Navbar */}
+        <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-4 sm:px-6 backdrop-blur flex items-center justify-between gap-4 shrink-0">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+              aria-label="Open sidebar menu"
+            >
+              <MenuIcon className="h-5 w-5" aria-hidden="true" />
+            </button>
+            <h1 className="text-sm sm:text-base font-bold text-ink">
+              {activeView === "radar" && "Tasks Radar"}
+              {activeView === "workspace" && "Controlled Workspace"}
+              {activeView === "portfolio" && "Verified Portfolio"}
+            </h1>
           </div>
 
-          <div className="h-4 w-px bg-line shrink-0 hidden sm:block" aria-hidden="true" />
+          {/* Right Section: Status Pill, Theme Toggle, Profile Menu */}
+          <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
+            <LivePill />
+            <ThemeToggle />
 
-          {/* Core 3-View Navigation Switcher */}
-          <nav
-            aria-label="Core Freelancer Navigation"
-            className="flex items-center gap-1 bg-canvas p-1 rounded-md border border-line"
-          >
-            <button
-              onClick={() => setActiveView("radar")}
-              aria-current={activeView === "radar" ? "page" : undefined}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                activeView === "radar"
-                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              <Radio className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Tasks</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView("workspace")}
-              aria-current={activeView === "workspace" ? "page" : undefined}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                activeView === "workspace"
-                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              <Server className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Workspace</span>
-            </button>
-
-            <button
-              onClick={() => setActiveView("portfolio")}
-              aria-current={activeView === "portfolio" ? "page" : undefined}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-semibold rounded-md transition-all ${
-                activeView === "portfolio"
-                  ? "bg-surface text-ink shadow-sm border border-line font-semibold"
-                  : "text-muted hover:text-ink"
-              }`}
-            >
-              <Award className="h-3.5 w-3.5" aria-hidden="true" />
-              <span>Portfolio</span>
-            </button>
-          </nav>
-        </div>
-
-        {/* Right Section: Status Pill, Theme Toggle, Profile Menu */}
-        <div className="flex items-center gap-2.5 shrink-0">
-          <LivePill />
-          <ThemeToggle />
-
-          <Menu
-            triggerLabel={
-              <span className="flex items-center gap-2">
-                <span className="font-medium text-xs text-ink hidden sm:inline">
-                  {user.displayName}
+            <Menu
+              triggerLabel={
+                <span className="flex items-center gap-2">
+                  <span className="font-medium text-xs text-ink hidden sm:inline">
+                    {user.displayName}
+                  </span>
+                  <Chip
+                    tone="neutral"
+                    icon={<UserIcon className="h-3 w-3" aria-hidden="true" />}
+                    className="hidden md:inline-flex"
+                  >
+                    Freelancer
+                  </Chip>
                 </span>
-                <Chip
-                  tone="neutral"
-                  icon={<UserIcon className="h-3 w-3" aria-hidden="true" />}
-                  className="hidden md:inline-flex"
-                >
-                  Freelancer
-                </Chip>
-              </span>
-            }
-            items={userMenuItems}
-          />
-        </div>
-      </header>
-
-      {/* Main View Display */}
-      <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-hidden">
-        {activeView === "radar" && (
-          <ErrorBoundary fallbackTitle="Task Radar Error">
-            <TaskRadarView onOpenWorkspace={handleOpenWorkspace} />
-          </ErrorBoundary>
-        )}
-
-        {activeView === "workspace" && (
-          <ErrorBoundary fallbackTitle="Controlled Workspace Error">
-            <ControlledWorkspaceView
-              projectId={selectedProjectId}
-              projects={projects || []}
-              onSelectProject={(id) => {
-                setSelectedProjectId(id);
-                onSelectTask(id);
-              }}
-              onNavigateToPortfolio={() => setActiveView("portfolio")}
-              onNavigateToRadar={() => setActiveView("radar")}
+              }
+              items={userMenuItems}
             />
-          </ErrorBoundary>
-        )}
+          </div>
+        </header>
 
-        {activeView === "portfolio" && (
-          <ErrorBoundary fallbackTitle="Verified Portfolio Error">
-            <VerifiedPortfolioView onNavigateToRadar={() => setActiveView("radar")} />
-          </ErrorBoundary>
-        )}
-      </main>
+        {/* Main View Display */}
+        <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+          {activeView === "radar" && (
+            <ErrorBoundary fallbackTitle="Task Radar Error">
+              <TaskRadarView onOpenWorkspace={handleOpenWorkspace} />
+            </ErrorBoundary>
+          )}
+
+          {activeView === "workspace" && (
+            <ErrorBoundary fallbackTitle="Controlled Workspace Error">
+              <ControlledWorkspaceView
+                projectId={selectedProjectId}
+                projects={projects || []}
+                onSelectProject={(id) => {
+                  setSelectedProjectId(id);
+                  onSelectTask(id);
+                }}
+                onNavigateToPortfolio={() => setActiveView("portfolio")}
+                onNavigateToRadar={() => setActiveView("radar")}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeView === "portfolio" && (
+            <ErrorBoundary fallbackTitle="Verified Portfolio Error">
+              <VerifiedPortfolioView onNavigateToRadar={() => setActiveView("radar")} />
+            </ErrorBoundary>
+          )}
+        </main>
+      </div>
 
       {/* Keyboard Shortcuts Dialog */}
       <Dialog
@@ -288,8 +434,8 @@ export const Shell: React.FC<ShellProps> = ({
         </div>
       </Dialog>
 
-      {/* Dev Diagnostics Drawer (Ctrl+Shift+D) */}
-      {env.devTools && devDrawerOpen && (
+      {/* Developer Diagnostics Drawer */}
+      {env.devTools && (
         <React.Suspense fallback={null}>
           <DevDrawer
             open={devDrawerOpen}
