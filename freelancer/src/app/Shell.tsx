@@ -255,7 +255,7 @@ export const Shell: React.FC<ShellProps> = ({
 
         {activeView === "portfolio" && (
           <ErrorBoundary fallbackTitle="Verified Portfolio Error">
-            <VerifiedPortfolioView />
+            <VerifiedPortfolioView onNavigateToRadar={() => setActiveView("radar")} />
           </ErrorBoundary>
         )}
       </main>
