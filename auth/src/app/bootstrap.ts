@@ -20,32 +20,25 @@ export async function restoreSession(): Promise<BootstrapResult> {
     }
   }
 
-  // Fast path for real backend mode: if there is no saved refresh token in localStorage, the user is anonymous immediately
-  if (!VITE_USE_MOCKS && typeof window !== "undefined") {
-    const storedRt = localStorage.getItem("cb_rt");
-    if (!storedRt) {
-      clearSession();
-      return { status: "anonymous" };
-    }
-  }
-
+  // Use a snappy timeout (2.5s) for background session restoration so anonymous users load instantly
   const controller = new AbortController();
-  const timer = globalThis.setTimeout(() => controller.abort(), 8000);
+  const timer = globalThis.setTimeout(() => controller.abort(), 2500);
 
   try {
+    // In real mode, refresh token is an httpOnly cookie sent automatically via credentials: "include"
     const { accessToken } = await refresh(controller.signal);
     setAccessToken(accessToken);
     const user = await getMe(controller.signal);
     setSession({ user, accessToken });
     return { status: "authenticated", user };
   } catch (err) {
-    if (err instanceof ApiError && (err.status === 503 || err.code === "SERVICE_UNAVAILABLE")) {
+    if (
+      err instanceof ApiError &&
+      (err.status === 503 || err.status === 502 || err.code === "SERVICE_UNAVAILABLE")
+    ) {
       return { status: "unavailable" };
     }
-    if (err instanceof DOMException && err.name === "AbortError") {
-      clearSession();
-      return { status: "unavailable" };
-    }
+    // If not authenticated or request timed out, proceed immediately as anonymous
     clearSession();
     return { status: "anonymous" };
   } finally {

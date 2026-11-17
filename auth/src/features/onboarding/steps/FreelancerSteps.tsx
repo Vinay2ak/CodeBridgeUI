@@ -358,6 +358,7 @@ export function FreelancerStep1({
 
 export interface FreelancerStep2Props extends BaseFreelancerStepProps {
   onNext: (data: FreelancerStep2Data) => void;
+  isSubmitting?: boolean;
 }
 
 export function FreelancerStep2({
@@ -365,6 +366,7 @@ export function FreelancerStep2({
   onValuesChange,
   onBack,
   onNext,
+  isSubmitting = false,
   externalErrors,
   focusField,
 }: FreelancerStep2Props) {
@@ -633,7 +635,13 @@ export function FreelancerStep2({
         />
       </div>
 
-      <WizardNav showBack onBack={() => onBack(currentData())} submitLabel="Continue" />
+      <WizardNav
+        showBack
+        onBack={() => onBack(currentData())}
+        submitLabel="Complete setup"
+        loading={isSubmitting}
+        submitDisabled={isSubmitting}
+      />
     </form>
   );
 }

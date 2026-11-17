@@ -12,7 +12,7 @@ export interface WizardLayoutProps {
   onStepClick?: (step: number) => void;
   isSignedIn: boolean;
   onSignOut?: () => void;
-  preview: ReactNode;
+  preview?: ReactNode;
   children: ReactNode;
 }
 
@@ -47,24 +47,31 @@ export function WizardLayout({
         </div>
       </header>
 
-      <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 flex-1">
-        <div className="lg:grid lg:grid-cols-[55fr_45fr] lg:gap-10 lg:items-start">
+      <main className="w-full max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-6 lg:py-10 flex-1">
+        {preview ? (
+          <div className="lg:grid lg:grid-cols-[55fr_45fr] lg:gap-10 lg:items-start max-w-7xl">
+            <div className="min-w-0">
+              <Stepper currentStep={currentStep} role={role} onStepClick={onStepClick} />
+              <Card className="max-w-xl min-w-0">{children}</Card>
+
+              <div className="lg:hidden mt-6 max-w-xl">
+                <details className="rounded-lg border border-border bg-surface p-4">
+                  <summary className="cursor-pointer text-sm font-medium text-text">
+                    Preview your card
+                  </summary>
+                  <div className="mt-4">{preview}</div>
+                </details>
+              </div>
+            </div>
+
+            <aside className="hidden lg:block lg:sticky lg:top-6 min-w-0">{preview}</aside>
+          </div>
+        ) : (
           <div className="min-w-0">
             <Stepper currentStep={currentStep} role={role} onStepClick={onStepClick} />
-            <Card className="max-w-xl min-w-0">{children}</Card>
-
-            <div className="lg:hidden mt-6 max-w-xl">
-              <details className="rounded-lg border border-border bg-surface p-4">
-                <summary className="cursor-pointer text-sm font-medium text-text">
-                  Preview your card
-                </summary>
-                <div className="mt-4">{preview}</div>
-              </details>
-            </div>
+            <Card className="min-w-0">{children}</Card>
           </div>
-
-          <aside className="hidden lg:block lg:sticky lg:top-6 min-w-0">{preview}</aside>
-        </div>
+        )}
       </main>
     </div>
   );

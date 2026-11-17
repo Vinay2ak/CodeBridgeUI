@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { CheckCircle2, Circle, CircleCheck, Eye, EyeOff, Github } from "lucide-react";
 import { Link } from "react-router-dom";
-import { redirectToDashboard } from "../../../app/redirect";
 import { Alert } from "../../../components/ui/Alert";
 import { Button } from "../../../components/ui/Button";
 import { VITE_GITHUB_MODE } from "../../../lib/env";
@@ -167,7 +166,7 @@ export function Step0Account({
 
     try {
       const { user, accessToken, refreshToken } = await register(parsed.data);
-      const readyUser: User = { ...user, onboardingCompleted: true };
+      const readyUser: User = { ...user, onboardingCompleted: false };
       setSession({ user: readyUser, accessToken, refreshToken });
 
       writeMockCookie({
@@ -177,20 +176,13 @@ export function Step0Account({
         role: readyUser.role,
         status: readyUser.status,
         createdAt: readyUser.createdAt,
-        onboardingCompleted: true,
+        onboardingCompleted: false,
       });
 
       onComplete?.({
         user: readyUser,
         githubConnected: false,
         githubUsername: prefilledGithubUsername,
-      });
-
-      // Direct redirection to the respective dashboard
-      redirectToDashboard(readyUser.role, {
-        user: readyUser,
-        accessToken,
-        refreshToken,
       });
     } catch (err: any) {
       // If backend is unavailable or proxy returns 500, seamlessly register and proceed
@@ -211,7 +203,7 @@ export function Step0Account({
           role: parsed.data.role || "owner",
           status: "active",
           createdAt: new Date().toISOString(),
-          onboardingCompleted: true,
+          onboardingCompleted: false,
         };
 
         setSession({
@@ -227,19 +219,13 @@ export function Step0Account({
           role: fallbackUser.role,
           status: fallbackUser.status,
           createdAt: fallbackUser.createdAt,
-          onboardingCompleted: true,
+          onboardingCompleted: false,
         });
 
         onComplete?.({
           user: fallbackUser,
           githubConnected: false,
           githubUsername: prefilledGithubUsername,
-        });
-
-        redirectToDashboard(fallbackUser.role, {
-          user: fallbackUser,
-          accessToken: "demo-token-" + fallbackUser.id,
-          refreshToken: "demo-rt-" + fallbackUser.id,
         });
         return;
       }

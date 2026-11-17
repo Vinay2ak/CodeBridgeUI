@@ -9,7 +9,7 @@ export interface StepperProps {
 
 const LABELS_BY_ROLE: Record<UserRole | "none", readonly string[]> = {
   owner: ["Account", "Profile"],
-  freelancer: ["Account", "Identity", "Skills", "Availability"],
+  freelancer: ["Account", "Identity", "Skills"],
   none: ["Account", "Profile"],
 };
 

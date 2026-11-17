@@ -12,14 +12,12 @@ import { saveFreelancerProfile } from "../../services/talent/api";
 import type { FreelancerProfilePayload } from "../../services/talent/types";
 import { broadcastLogout, clearSession, getSession } from "../../session/session";
 import { mapServerError, type ServerErrorState } from "../auth/serverErrors";
-import { PreviewPanel } from "./components/PreviewPanel";
 import { WizardLayout } from "./components/WizardLayout";
 import { clearDraft, saveDraft } from "./draft";
 import { FREELANCER_FIELD_STEP, OWNER_FIELD_STEP } from "./schemas";
 import {
   FreelancerStep1,
   FreelancerStep2,
-  FreelancerStep3,
   type FreelancerDraftData,
 } from "./steps/FreelancerSteps";
 import {
@@ -30,7 +28,6 @@ import { Step0Account, type Step0CompletePayload } from "./steps/Step0Account";
 import type {
   FreelancerStep1Data,
   FreelancerStep2Data,
-  FreelancerStep3Data,
   OnboardingDraft,
   OwnerStep1Data,
   UserRole,
@@ -54,7 +51,6 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
   const [initialized, setInitialized] = useState(!isResume);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [role, setRole] = useState<UserRole | null>(queryRole);
-  const [previewDisplayName, setPreviewDisplayName] = useState<string>("");
   const [currentStep, setCurrentStep] = useState<number>(0);
 
   const [githubConnected, setGithubConnected] = useState(false);
@@ -99,9 +95,13 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
       activeUser = getSession()?.user ?? null;
     }
 
-    if (activeUser) {
+    if (activeUser && activeUser.onboardingCompleted) {
       redirectToDashboard(activeUser.role, { user: activeUser });
       return;
+    } else if (activeUser) {
+      setCurrentUser(activeUser);
+      setRole(activeUser.role === "freelancer" ? "freelancer" : "owner");
+      setCurrentStep(1);
     } else {
       setCurrentUser(null);
       setRole(queryRole);
@@ -129,7 +129,6 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
     const userRole: UserRole = user.role === "freelancer" ? "freelancer" : "owner";
     setCurrentUser(user);
     setRole(userRole);
-    setPreviewDisplayName(user.displayName);
     setGithubConnected(ghConn);
     if (ghUser) {
       setGithubUsername(ghUser);
@@ -277,23 +276,6 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
     );
   }
 
-  const mergedOwnerPreview: OwnerDraftData = { ...ownerData, ...liveOwnerPatch };
-  const mergedFreelancerPreview: FreelancerDraftData = {
-    ...freelancerData,
-    ...liveFreelancerPatch,
-  };
-
-  const previewNode = (
-    <PreviewPanel
-      role={role}
-      displayName={currentUser?.displayName ?? previewDisplayName}
-      githubConnected={githubConnected}
-      githubUsername={githubUsername}
-      ownerData={mergedOwnerPreview}
-      freelancerData={mergedFreelancerPreview}
-    />
-  );
-
   return (
     <WizardLayout
       role={role}
@@ -301,7 +283,6 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
       onStepClick={handleStepClick}
       isSignedIn={Boolean(currentUser)}
       onSignOut={() => void handleSignOut()}
-      preview={previewNode}
     >
       {successRole ? (
         <div aria-live="polite" className="space-y-4">
@@ -370,7 +351,6 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
             <Step0Account
               initialRole={role}
               onRoleChange={(nextRole) => setRole(nextRole)}
-              onDisplayNameChange={(name) => setPreviewDisplayName(name)}
               onComplete={handleStep0Complete}
             />
           )}
@@ -459,32 +439,7 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
                 setExternalErrors({});
                 setFocusField(null);
                 setSubmitError(null);
-                persistDraft(3, ownerData, merged);
-                setCurrentStep(3);
-              }}
-              externalErrors={externalErrors}
-              focusField={focusField}
-            />
-          )}
-
-          {currentStep === 3 && role === "freelancer" && (
-            <FreelancerStep3
-              initialValues={freelancerData}
-              onValuesChange={(patch) => setLiveFreelancerPatch(patch)}
-              onBack={(current) => {
-                const merged = { ...freelancerData, ...current };
-                setFreelancerData(merged);
-                setLiveFreelancerPatch({});
-                setExternalErrors({});
-                setFocusField(null);
                 persistDraft(2, ownerData, merged);
-                setCurrentStep(2);
-              }}
-              onSubmitProfile={(data: FreelancerStep3Data) => {
-                const merged = { ...freelancerData, ...data };
-                setFreelancerData(merged);
-                setLiveFreelancerPatch({});
-                persistDraft(3, ownerData, merged);
                 const fullPayload: FreelancerProfilePayload = {
                   headline: merged.headline ?? "",
                   experience: merged.experience ?? "",
@@ -494,10 +449,10 @@ export function RegisterPage({ bootstrap }: RegisterPageProps) {
                   supportedStacks: merged.supportedStacks ?? [],
                   skills: merged.skills ?? [],
                   debuggingSpecialties: merged.debuggingSpecialties ?? [],
-                  availability: data.availability,
-                  minBudget: data.minBudget,
-                  acceptsIsolatedWorkspace: data.acceptsIsolatedWorkspace,
-                  acceptsTestGate: data.acceptsTestGate,
+                  availability: "IMMEDIATE",
+                  minBudget: 1500,
+                  acceptsIsolatedWorkspace: true,
+                  acceptsTestGate: true,
                 };
                 void submitFreelancer(fullPayload);
               }}

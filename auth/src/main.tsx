@@ -3,7 +3,7 @@ import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { App } from "./App";
 import { ErrorBoundary } from "./app/ErrorBoundary";
-import { VITE_USE_MOCKS } from "./lib/env";
+import { VITE_USE_MOCKS, VITE_MOCK_SERVICES } from "./lib/env";
 import { applyTheme, getTheme } from "./lib/theme";
 import "./styles/tokens.css";
 import "./styles/index.css";
@@ -12,19 +12,20 @@ import "./styles/index.css";
 applyTheme(getTheme());
 
 async function enableMocks(): Promise<void> {
-  if (!VITE_USE_MOCKS) return;
+  const shouldStartMocks = VITE_USE_MOCKS || VITE_MOCK_SERVICES.length > 0;
+  if (!shouldStartMocks) return;
   try {
     const { startMocks } = await import("./mocks/browser");
     await Promise.race([
       startMocks(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error("MSW start timeout")), 600)),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("MSW start timeout")), 800)),
     ]);
   } catch (err) {
     console.warn("[MSW] Mock service worker warning (continuing render):", err);
   }
 
   try {
-    if (import.meta.env.DEV && import.meta.env.VITE_USE_MOCKS === "true") {
+    if (import.meta.env.DEV && VITE_USE_MOCKS) {
       const { installDevHelpers } = await import("./mocks/devHelpers");
       installDevHelpers();
     }

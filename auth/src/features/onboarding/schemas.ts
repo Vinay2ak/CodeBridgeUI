@@ -203,8 +203,8 @@ export const FREELANCER_FIELD_STEP: Record<string, number> = {
   supportedStacks: 2,
   skills: 2,
   debuggingSpecialties: 2,
-  availability: 3,
-  minBudget: 3,
-  acceptsIsolatedWorkspace: 3,
-  acceptsTestGate: 3,
+  availability: 2,
+  minBudget: 2,
+  acceptsIsolatedWorkspace: 2,
+  acceptsTestGate: 2,
 };
