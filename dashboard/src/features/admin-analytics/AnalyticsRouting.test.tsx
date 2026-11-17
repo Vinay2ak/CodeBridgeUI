@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, cleanup } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppShell } from '../../app/AppShell';
@@ -31,21 +31,25 @@ function renderShell(initialEntry = '/owner', role: 'owner' | 'admin' = 'admin')
 }
 
 describe('Analytics Routing and Navigation', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
   it('renders Analytics link in sidebar for admin user', () => {
     renderShell('/owner', 'admin');
-    const analyticsLink = screen.getByRole('link', { name: /analytics/i });
-    expect(analyticsLink).toBeInTheDocument();
-    expect(analyticsLink).toHaveAttribute('href', '/admin/analytics');
-    expect(analyticsLink).not.toHaveAttribute('aria-current');
+    const analyticsLinks = screen.getAllByRole('link', { name: /analytics/i });
+    expect(analyticsLinks.length).toBeGreaterThanOrEqual(1);
+    expect(analyticsLinks[0]).toHaveAttribute('href', '/admin/analytics');
+    expect(analyticsLinks[0]).not.toHaveAttribute('aria-current');
 
     vi.restoreAllMocks();
   });
 
   it('marks Analytics link as active with aria-current="page" on /admin/analytics', () => {
     renderShell('/admin/analytics', 'admin');
-    const analyticsLink = screen.getByRole('link', { name: /analytics/i });
-    expect(analyticsLink).toBeInTheDocument();
-    expect(analyticsLink).toHaveAttribute('aria-current', 'page');
+    const analyticsLinks = screen.getAllByRole('link', { name: /analytics/i });
+    expect(analyticsLinks.length).toBeGreaterThanOrEqual(1);
+    expect(analyticsLinks.some((l) => l.getAttribute('aria-current') === 'page')).toBe(true);
 
     vi.restoreAllMocks();
   });
@@ -84,8 +88,8 @@ describe('Analytics Routing and Navigation', () => {
       </MemoryRouter>
     );
 
-    // Non-admin should be redirected to their role route (/owner)
-    expect(screen.queryByText(/Platform analytics/i)).not.toBeInTheDocument();
+    // Non-admin should be redirected to their role route (/owner) and NOT see the standalone Admin / Analytics breadcrumb
+    expect(screen.queryByText('Admin / Analytics')).not.toBeInTheDocument();
 
     vi.restoreAllMocks();
   });

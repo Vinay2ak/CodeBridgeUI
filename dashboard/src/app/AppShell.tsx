@@ -242,10 +242,7 @@ export const AppShell: React.FC<AppShellProps> = ({ children }) => {
               align="right"
               trigger={
                 <div className="flex items-center gap-2 p-1.5 rounded-md hover:bg-surface-raised transition-colors cursor-pointer border border-transparent hover:border-border">
-                  <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold text-xs">
-                    {user?.displayName ? user.displayName.charAt(0).toUpperCase() : 'O'}
-                  </div>
-                  <span className="hidden md:inline-block text-sm font-medium max-w-[120px] truncate text-text">
+                  <span className="text-sm font-medium max-w-[140px] truncate text-text">
                     {user?.displayName || 'Project Owner'}
                   </span>
                   <div className="hidden sm:inline-block">
