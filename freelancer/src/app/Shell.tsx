@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Code2,
   User as UserIcon,
@@ -12,6 +13,8 @@ import {
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
+import { projectApi } from "../services/project/api";
+import type { ProjectScope } from "../services/project/types";
 import { TaskRadarView } from "../features/radar/TaskRadarView";
 import { ControlledWorkspaceView } from "../features/workspace/ControlledWorkspaceView";
 import { VerifiedPortfolioView } from "../features/portfolio/VerifiedPortfolioView";
@@ -49,6 +52,34 @@ export const Shell: React.FC<ShellProps> = ({
   );
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Real backend query for projects list to auto-select real active project
+  const { data: projects } = useQuery<ProjectScope[]>({
+    queryKey: ["projects", "realtime-list"],
+    queryFn: async () => {
+      try {
+        return await projectApi.getProjects();
+      } catch {
+        return [];
+      }
+    },
+    staleTime: 30_000,
+  });
+
+  // Automatically select the real project from backend when loaded
+  useEffect(() => {
+    if (projects && projects.length > 0) {
+      if (!currentTaskId || selectedProjectId === "proj_1024") {
+        const found = currentTaskId
+          ? projects.find((p: ProjectScope) => p.id === currentTaskId)
+          : undefined;
+        const target = found || projects[0];
+        if (target && target.id !== selectedProjectId) {
+          setSelectedProjectId(target.id);
+        }
+      }
+    }
+  }, [projects, currentTaskId, selectedProjectId]);
 
   // Sync currentTaskId if provided
   useEffect(() => {
@@ -211,7 +242,13 @@ export const Shell: React.FC<ShellProps> = ({
           <ErrorBoundary fallbackTitle="Controlled Workspace Error">
             <ControlledWorkspaceView
               projectId={selectedProjectId}
+              projects={projects || []}
+              onSelectProject={(id) => {
+                setSelectedProjectId(id);
+                onSelectTask(id);
+              }}
               onNavigateToPortfolio={() => setActiveView("portfolio")}
+              onNavigateToRadar={() => setActiveView("radar")}
             />
           </ErrorBoundary>
         )}
