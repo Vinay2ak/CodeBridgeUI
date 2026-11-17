@@ -117,4 +117,50 @@ export const profileApi = {
 
     return adaptPortfolioSummary([]);
   },
+
+  async getFreelancerSkills(): Promise<string[]> {
+    try {
+      // 1. Check /api/v1/freelancers/me
+      try {
+        const res = await request<any>("/api/v1/freelancers/me");
+        const skills = res?.skills;
+        if (Array.isArray(skills) && skills.length > 0) {
+          return skills.map(String);
+        }
+      } catch {}
+
+      // 2. Check /api/v1/profile
+      try {
+        const res = await request<any>("/api/v1/profile");
+        const skills = res?.freelancer_profile?.skills || res?.skills;
+        if (Array.isArray(skills) && skills.length > 0) {
+          return skills.map(String);
+        }
+      } catch {}
+
+      // 3. Check /api/v1/talent/profiles/me
+      try {
+        const res = await request<any>("/api/v1/talent/profiles/me");
+        const skills = res?.profile?.skills;
+        if (Array.isArray(skills) && skills.length > 0) {
+          return skills.map(String);
+        }
+      } catch {}
+    } catch {}
+
+    // Check localStorage fallback if available
+    if (typeof localStorage !== "undefined") {
+      try {
+        const stored = localStorage.getItem("cb_user");
+        if (stored) {
+          const u = JSON.parse(stored);
+          if (Array.isArray(u.skills) && u.skills.length > 0) {
+            return u.skills.map(String);
+          }
+        }
+      } catch {}
+    }
+
+    return [];
+  },
 };

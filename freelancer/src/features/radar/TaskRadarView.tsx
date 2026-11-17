@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronRight, AlertCircle, RefreshCw } from "lucide-react";
+import {
+  ChevronRight,
+  AlertCircle,
+  RefreshCw,
+  Sparkles,
+  Check,
+  CheckCircle2,
+} from "lucide-react";
 import { projectApi } from "../../services/project/api";
 import { workspaceApi } from "../../services/workspace/api";
 import { paymentApi } from "../../services/payment/api";
+import { profileApi } from "../../services/profile/api";
 import type { ProjectScope } from "../../services/project/types";
 import { formatCurrencyINR } from "../../lib/format";
 
@@ -36,6 +44,22 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
   const [taskAccepted, setTaskAccepted] = useState<boolean>(false);
   const [taskDeclined, setTaskDeclined] = useState<boolean>(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    selectedTaskId || null
+  );
+
+  useEffect(() => {
+    if (selectedTaskId) {
+      setSelectedProjectId(selectedTaskId);
+    }
+  }, [selectedTaskId]);
+
+  // Fetch logged-in freelancer profile skills for personalized tech stack matching
+  const { data: userSkills = [] } = useQuery<string[]>({
+    queryKey: ["freelancer", "skills"],
+    queryFn: () => profileApi.getFreelancerSkills(),
+    staleTime: 60_000,
+  });
 
   // Real backend query for tasks / projects list
   const {
@@ -53,9 +77,46 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
     retry: 1,
   });
 
+  // Helper to compute tech stack matching
+  const computeSkillMatch = (project: ProjectScope, skills: string[]) => {
+    if (!skills || skills.length === 0) {
+      return { matched: true, matchedSkills: [] as string[], matchPercentage: 100 };
+    }
+    const pSkills = project.skills || [];
+    if (pSkills.length === 0) {
+      return { matched: true, matchedSkills: [] as string[], matchPercentage: 100 };
+    }
+    const matched = pSkills.filter((ps) =>
+      skills.some((us) => us.trim().toLowerCase() === ps.trim().toLowerCase())
+    );
+    const percentage = Math.round((matched.length / pSkills.length) * 100);
+    return {
+      matched: matched.length > 0,
+      matchedSkills: matched,
+      matchPercentage: percentage,
+    };
+  };
+
+  // Prioritize projects that match the freelancer's profile skills
+  const sortedProjects = React.useMemo(() => {
+    if (!projects || projects.length === 0) return [];
+    if (userSkills.length === 0) return projects;
+    return [...projects].sort((a, b) => {
+      const matchA = computeSkillMatch(a, userSkills).matchedSkills.length;
+      const matchB = computeSkillMatch(b, userSkills).matchedSkills.length;
+      return matchB - matchA;
+    });
+  }, [projects, userSkills]);
+
   const activeProject: ProjectScope | undefined =
+    sortedProjects.find((p) => p.id === selectedProjectId) ||
+    sortedProjects[0] ||
     projects?.find((p) => p.id === selectedTaskId) ||
-    (projects && projects.length > 0 ? projects[0] : undefined);
+    projects?.[0];
+
+  const currentMatch = activeProject
+    ? computeSkillMatch(activeProject, userSkills)
+    : { matched: false, matchedSkills: [] as string[], matchPercentage: 0 };
 
   // Real-time task specification query from /api/v1/tasks/{id}
   const {
@@ -300,90 +361,188 @@ export const TaskRadarView: React.FC<TaskRadarViewProps> = ({
       <div className="max-w-[1120px] mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10">
         {/* Main 2-column layout (fluid main + sticky sidebar) */}
         <div className="flex flex-col lg:flex-row items-start gap-8 lg:gap-12">
-          {/* Main Unboxed Column (fluid, max 720px) */}
-          <main className="w-full lg:max-w-[720px] flex-1 space-y-8 order-2 lg:order-1">
-            {/* Breadcrumb: Tasks / <task_id> */}
-            <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted">
-              {/* TODO(route): link to all tasks list view */}
-              <a
-                href="#tasks"
-                className="hover:text-ink transition-colors"
-                onClick={(e) => {
-                  e.preventDefault();
-                }}
-              >
-                Tasks
-              </a>
-              <ChevronRight className="h-3 w-3 text-muted shrink-0" aria-hidden="true" />
-              <span className="font-mono text-ink">{taskId}</span>
-            </nav>
+          {/* Main Task Note Box (fluid, max 720px) */}
+          <main className="w-full lg:max-w-[720px] flex-1 order-2 lg:order-1">
+            <div className="rounded-2xl border border-line bg-surface p-6 sm:p-8 shadow-sm space-y-6">
+              {/* Note Header Bar: Breadcrumb + Skill Match Pill */}
+              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-line">
+                <nav aria-label="Breadcrumb" className="flex items-center gap-1.5 text-xs text-muted">
+                  {/* TODO(route): link to all tasks list view */}
+                  <a
+                    href="#tasks"
+                    className="hover:text-ink transition-colors"
+                    onClick={(e) => {
+                      e.preventDefault();
+                    }}
+                  >
+                    Tasks
+                  </a>
+                  <ChevronRight className="h-3 w-3 text-muted shrink-0" aria-hidden="true" />
+                  <span className="font-mono text-ink font-semibold">{taskId}</span>
+                </nav>
 
-            {/* H1: Task Title in Sentence Case, without ID */}
-            <div>
-              <h1 className="text-[28px] leading-[34px] font-semibold text-ink text-left">
-                {taskTitle}
-              </h1>
-            </div>
+                {/* Tech Stack Match Badge */}
+                {currentMatch.matchedSkills.length > 0 ? (
+                  <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-success-bg text-success border border-success-border">
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                    <span>{currentMatch.matchPercentage}% Tech Stack Match</span>
+                  </div>
+                ) : userSkills.length > 0 ? (
+                  <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-raised text-muted border border-line">
+                    <span>Available Scope</span>
+                  </div>
+                ) : null}
+              </div>
 
-            {/* 1px Divider */}
-            <div className="h-px bg-line" aria-hidden="true" />
-
-            {/* What's broken */}
-            <section aria-labelledby="heading-broken" className="space-y-3">
-              <h2 id="heading-broken" className="text-base font-semibold text-ink">
-                What is broken
-              </h2>
-              <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line">
-                {problemText}
-              </p>
-            </section>
-
-            {/* 1px Divider */}
-            <div className="h-px bg-line" aria-hidden="true" />
-
-            {/* What the owner expects */}
-            <section aria-labelledby="heading-expects" className="space-y-3">
-              <h2 id="heading-expects" className="text-base font-semibold text-ink">
-                What the owner expects
-              </h2>
-              <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line">
-                {expectedOutcome}
-              </p>
-            </section>
-
-            {/* 1px Divider */}
-            <div className="h-px bg-line" aria-hidden="true" />
-
-            {/* Done when (Acceptance criteria) */}
-            <section aria-labelledby="heading-criteria" className="space-y-3">
-              <h2 id="heading-criteria" className="text-base font-semibold text-ink">
-                Done when
-              </h2>
-              {criteriaList.length > 0 ? (
-                <ol className="space-y-2 list-decimal list-inside text-sm leading-[22px] text-ink">
-                  {criteriaList.map((item, idx) => (
-                    <li key={idx} className="pl-1">
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ol>
-              ) : (
-                <p className="text-sm text-muted">No criteria specified.</p>
+              {/* Multi-Task Switcher Pill Strip (if multiple projects exist) */}
+              {sortedProjects.length > 1 && (
+                <div className="flex flex-wrap items-center gap-2 pb-1">
+                  <span className="text-[11px] font-mono text-muted uppercase tracking-wider font-semibold">
+                    Matching Tasks ({sortedProjects.length}):
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {sortedProjects.map((p) => {
+                      const isSelected = p.id === activeProject.id;
+                      const pMatch = computeSkillMatch(p, userSkills);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setSelectedProjectId(p.id)}
+                          className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all flex items-center gap-1.5 ${
+                            isSelected
+                              ? "bg-primary text-on-primary font-bold shadow-xs"
+                              : "bg-canvas border border-line text-muted hover:text-ink"
+                          }`}
+                        >
+                          {pMatch.matched && userSkills.length > 0 && (
+                            <span
+                              className={`h-1.5 w-1.5 rounded-full ${
+                                isSelected ? "bg-on-primary" : "bg-success"
+                              }`}
+                            />
+                          )}
+                          <span className="truncate max-w-[140px]">{p.title}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
-            </section>
 
-            {/* 1px Divider */}
-            <div className="h-px bg-line" aria-hidden="true" />
+              {/* Personalized Profile Match Recommendation Note */}
+              {currentMatch.matchedSkills.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-info-bg/40 border border-info-border text-xs text-primary flex items-start gap-2.5">
+                  <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5 text-primary" aria-hidden="true" />
+                  <div className="space-y-0.5">
+                    <p className="font-semibold text-ink">
+                      Tailored to your developer tech stack
+                    </p>
+                    <p className="text-muted leading-relaxed">
+                      This task requires <strong>{currentMatch.matchedSkills.join(", ")}</strong>, matching your verified freelancer skills.
+                    </p>
+                  </div>
+                </div>
+              )}
 
-            {/* Stack */}
-            <section aria-labelledby="heading-stack" className="space-y-3">
-              <h2 id="heading-stack" className="text-base font-semibold text-ink">
-                Stack
-              </h2>
-              <p className="text-sm text-ink leading-relaxed">
-                {skillsList.join(", ")}
-              </p>
-            </section>
+              {/* H1: Task Title in Sentence Case, without ID */}
+              <div>
+                <h1 className="text-[26px] sm:text-[28px] leading-[34px] font-bold text-ink text-left">
+                  {taskTitle}
+                </h1>
+                <p className="text-xs text-muted mt-1">
+                  Posted by <span className="font-medium text-ink">{activeProject.ownerName}</span>
+                </p>
+              </div>
+
+              {/* 1px Divider */}
+              <div className="h-px bg-line" aria-hidden="true" />
+
+              {/* What is broken */}
+              <section aria-labelledby="heading-broken" className="space-y-2.5">
+                <h2 id="heading-broken" className="text-base font-semibold text-ink flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4 text-warning" aria-hidden="true" />
+                  <span>What is broken</span>
+                </h2>
+                <div className="p-3.5 rounded-xl bg-canvas border border-line/60">
+                  <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line font-mono text-xs sm:text-sm">
+                    {problemText}
+                  </p>
+                </div>
+              </section>
+
+              {/* 1px Divider */}
+              <div className="h-px bg-line" aria-hidden="true" />
+
+              {/* What the owner expects */}
+              <section aria-labelledby="heading-expects" className="space-y-2.5">
+                <h2 id="heading-expects" className="text-base font-semibold text-ink flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-primary" aria-hidden="true" />
+                  <span>What the owner expects</span>
+                </h2>
+                <div className="p-3.5 rounded-xl bg-canvas border border-line/60">
+                  <p className="text-sm leading-[22px] text-ink max-w-[68ch] whitespace-pre-line">
+                    {expectedOutcome}
+                  </p>
+                </div>
+              </section>
+
+              {/* 1px Divider */}
+              <div className="h-px bg-line" aria-hidden="true" />
+
+              {/* Done when (Acceptance criteria) */}
+              <section aria-labelledby="heading-criteria" className="space-y-2.5">
+                <h2 id="heading-criteria" className="text-base font-semibold text-ink">
+                  Done when
+                </h2>
+                {criteriaList.length > 0 ? (
+                  <ol className="space-y-2 list-decimal list-inside text-sm leading-[22px] text-ink p-3.5 rounded-xl bg-canvas border border-line/60">
+                    {criteriaList.map((item, idx) => (
+                      <li key={idx} className="pl-1">
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-sm text-muted">No criteria specified.</p>
+                )}
+              </section>
+
+              {/* 1px Divider */}
+              <div className="h-px bg-line" aria-hidden="true" />
+
+              {/* Stack */}
+              <section aria-labelledby="heading-stack" className="space-y-2.5">
+                <h2 id="heading-stack" className="text-base font-semibold text-ink">
+                  Stack
+                </h2>
+                <div className="flex flex-wrap items-center gap-2">
+                  {skillsList.map((skill) => {
+                    const isMatchedSkill = userSkills.some(
+                      (us) => us.trim().toLowerCase() === skill.trim().toLowerCase()
+                    );
+                    return (
+                      <span
+                        key={skill}
+                        className={`px-3 py-1 rounded-lg text-xs font-mono font-medium border flex items-center gap-1.5 ${
+                          isMatchedSkill
+                            ? "bg-success-bg text-success border-success-border font-bold"
+                            : "bg-canvas text-ink border-line"
+                        }`}
+                      >
+                        {isMatchedSkill && <Check className="h-3 w-3" aria-hidden="true" />}
+                        <span>{skill}</span>
+                        {isMatchedSkill && (
+                          <span className="text-[10px] opacity-75 font-sans">(Matched)</span>
+                        )}
+                      </span>
+                    );
+                  })}
+                </div>
+                {/* Accessible text version for test runner and screen readers */}
+                <p className="sr-only">{skillsList.join(", ")}</p>
+              </section>
+            </div>
           </main>
 
           {/* Sticky Sidebar: ONLY boxed surface (1px border, 6px radius, 20px padding) */}
