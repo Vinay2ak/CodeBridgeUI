@@ -11,7 +11,6 @@ import {
   Server,
   Award,
   Menu as MenuIcon,
-  X,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
@@ -52,7 +51,7 @@ export const Shell: React.FC<ShellProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string>(
     currentTaskId || "proj_1024"
   );
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
@@ -91,11 +90,11 @@ export const Shell: React.FC<ShellProps> = ({
     }
   }, [currentTaskId]);
 
-  // Keyboard shortcut listener for Ctrl+Shift+D and Escape for mobile menu
+  // Keyboard shortcut listener for Ctrl+Shift+D and Escape for sidebar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isMobileMenuOpen) {
-        setIsMobileMenuOpen(false);
+      if (e.key === "Escape" && isSidebarOpen && typeof window !== "undefined" && window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
       }
       if (env.devTools && e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
         e.preventDefault();
@@ -104,13 +103,15 @@ export const Shell: React.FC<ShellProps> = ({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isMobileMenuOpen]);
+  }, [isSidebarOpen]);
 
   const handleOpenWorkspace = (projectId: string) => {
     setSelectedProjectId(projectId);
     onSelectTask(projectId);
     setActiveView("workspace");
-    setIsMobileMenuOpen(false);
+    if (typeof window !== "undefined" && window.innerWidth < 1024) {
+      setIsSidebarOpen(false);
+    }
   };
 
   const navItems = [
@@ -175,7 +176,9 @@ export const Shell: React.FC<ShellProps> = ({
             type="button"
             onClick={() => {
               setActiveView(item.key);
-              setIsMobileMenuOpen(false);
+              if (typeof window !== "undefined" && window.innerWidth < 1024) {
+                setIsSidebarOpen(false);
+              }
             }}
             aria-current={isActive ? "page" : undefined}
             className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs rounded-lg transition-all text-left ${
@@ -194,9 +197,6 @@ export const Shell: React.FC<ShellProps> = ({
                 {item.description}
               </span>
             </div>
-            {isActive && (
-              <div className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" aria-hidden="true" />
-            )}
           </button>
         );
       })}
@@ -213,13 +213,24 @@ export const Shell: React.FC<ShellProps> = ({
         Skip to main content
       </a>
 
-      {/* Fixed Sidebar for Desktop (>= 1024px) */}
+      {/* Mobile Backdrop (< 1024px) */}
+      {isSidebarOpen && (
+        <div
+          className="lg:hidden fixed inset-0 z-30 bg-overlay backdrop-blur-sm transition-opacity"
+          onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sliding Collapsible Sidebar */}
       <aside
         aria-label="Freelancer Sidebar Navigation"
-        className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:flex lg:w-64 lg:flex-col lg:border-r lg:border-line lg:bg-surface z-30"
+        className={`fixed inset-y-0 left-0 z-40 lg:z-30 w-64 flex flex-col border-r border-line bg-surface shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
       >
-        {/* Sidebar Header / Logo */}
-        <div className="flex h-14 items-center px-5 border-b border-line">
+        {/* Sidebar Header / Logo with three-line toggle */}
+        <div className="flex h-14 items-center justify-between px-4 border-b border-line">
           <div className="flex items-center gap-2.5">
             <div className="h-8 w-8 rounded-lg bg-info-bg border border-info-border flex items-center justify-center text-primary">
               <Code2 className="h-5 w-5" aria-hidden="true" />
@@ -233,6 +244,16 @@ export const Shell: React.FC<ShellProps> = ({
               </span>
             </div>
           </div>
+
+          {/* Three-line toggle button inside sidebar header to slide/hide */}
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            aria-label="Hide sidebar"
+            className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+          >
+            <MenuIcon className="h-4 w-4" aria-hidden="true" />
+          </button>
         </div>
 
         {/* Sidebar Navigation Items */}
@@ -242,104 +263,23 @@ export const Shell: React.FC<ShellProps> = ({
           </div>
           {sidebarNavigation}
         </div>
-
-        {/* Sidebar Footer */}
-        <div className="p-3 border-t border-line space-y-2">
-          <button
-            type="button"
-            onClick={() => setShortcutsOpen(true)}
-            className="w-full flex items-center justify-between p-2 rounded-lg bg-raised border border-line text-[11px] text-muted hover:text-ink transition-colors font-mono"
-          >
-            <span className="flex items-center gap-2">
-              <Keyboard className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-              <span>Shortcuts</span>
-            </span>
-            <kbd className="px-1.5 py-0.5 rounded bg-surface border border-line text-[10px] text-primary">
-              Ctrl+Enter
-            </kbd>
-          </button>
-        </div>
       </aside>
 
-      {/* Mobile Slide-Over Drawer (< 1024px) */}
-      {isMobileMenuOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label="Mobile navigation menu"
-          className="lg:hidden fixed inset-0 z-50 flex"
-        >
-          {/* Backdrop */}
-          <div
-            className="fixed inset-0 bg-overlay backdrop-blur-sm transition-opacity"
-            onClick={() => setIsMobileMenuOpen(false)}
-          />
-
-          {/* Drawer content */}
-          <div className="relative flex flex-col w-64 max-w-xs bg-surface border-r border-line shadow-2xl z-10">
-            <div className="flex h-14 items-center justify-between px-4 border-b border-line">
-              <div className="flex items-center gap-2.5">
-                <div className="h-8 w-8 rounded-lg bg-info-bg border border-info-border flex items-center justify-center text-primary">
-                  <Code2 className="h-5 w-5" aria-hidden="true" />
-                </div>
-                <div>
-                  <span className="font-bold text-base tracking-tight text-ink block leading-none">
-                    CodeBridge
-                  </span>
-                  <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mt-1">
-                    Freelancer Portal
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsMobileMenuOpen(false)}
-                aria-label="Close navigation menu"
-                className="p-1.5 rounded-lg text-muted hover:text-ink hover:bg-raised transition-colors"
-              >
-                <X className="h-5 w-5" aria-hidden="true" />
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-              <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-muted font-bold">
-                Navigation
-              </div>
-              {sidebarNavigation}
-            </div>
-
-            <div className="p-3 border-t border-line">
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  setShortcutsOpen(true);
-                }}
-                className="w-full flex items-center justify-between p-2 rounded-lg bg-raised border border-line text-[11px] text-muted hover:text-ink transition-colors font-mono"
-              >
-                <span className="flex items-center gap-2">
-                  <Keyboard className="h-3.5 w-3.5 text-primary" aria-hidden="true" />
-                  <span>Shortcuts</span>
-                </span>
-                <kbd className="px-1.5 py-0.5 rounded bg-surface border border-line text-[10px] text-primary">
-                  Ctrl+Enter
-                </kbd>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Application Layout (Offset by w-64 on lg) */}
-      <div className="lg:pl-64 flex flex-col min-h-screen">
+      {/* Main Application Layout (Smoothly shifts when sidebar opens/closes) */}
+      <div
+        className={`flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? "lg:pl-64" : "lg:pl-0"
+        }`}
+      >
         {/* Top Header Navbar */}
         <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-4 sm:px-6 backdrop-blur flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
+            {/* Three-line toggle button to show/hide sidebar */}
             <button
               type="button"
-              onClick={() => setIsMobileMenuOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
-              aria-label="Open sidebar menu"
+              onClick={() => setIsSidebarOpen((prev) => !prev)}
+              className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+              aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
             >
               <MenuIcon className="h-5 w-5" aria-hidden="true" />
             </button>
