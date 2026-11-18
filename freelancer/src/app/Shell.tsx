@@ -11,11 +11,13 @@ import {
   Server,
   Award,
   Menu as MenuIcon,
+  LayoutDashboard,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
 import { projectApi } from "../services/project/api";
 import type { ProjectScope } from "../services/project/types";
+import { DeveloperDashboardView } from "../features/dashboard/DeveloperDashboardView";
 import { TaskRadarView } from "../features/radar/TaskRadarView";
 import { ControlledWorkspaceView } from "../features/workspace/ControlledWorkspaceView";
 import { VerifiedPortfolioView } from "../features/portfolio/VerifiedPortfolioView";
@@ -30,7 +32,7 @@ const DevDrawer = React.lazy(() =>
   import("../components/dev/DevDrawer").then((m) => ({ default: m.DevDrawer }))
 );
 
-type ActiveView = "radar" | "workspace" | "portfolio";
+type ActiveView = "dashboard" | "radar" | "workspace" | "portfolio";
 
 interface ShellProps {
   user: User;
@@ -46,7 +48,7 @@ export const Shell: React.FC<ShellProps> = ({
   hasTasks,
 }) => {
   void hasTasks;
-  const [activeView, setActiveView] = useState<ActiveView>("radar");
+  const [activeView, setActiveView] = useState<ActiveView>("dashboard");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     currentTaskId || null
   );
@@ -114,6 +116,12 @@ export const Shell: React.FC<ShellProps> = ({
   };
 
   const navItems = [
+    {
+      key: "dashboard" as const,
+      label: "Dashboard",
+      icon: LayoutDashboard,
+      description: "Overview, earnings & stats",
+    },
     {
       key: "radar" as const,
       label: "Tasks",
@@ -283,6 +291,7 @@ export const Shell: React.FC<ShellProps> = ({
               <MenuIcon className="h-5 w-5" aria-hidden="true" />
             </button>
             <h1 className="text-sm sm:text-base font-bold text-ink">
+              {activeView === "dashboard" && "Developer Dashboard"}
               {activeView === "radar" && "Tasks Radar"}
               {activeView === "workspace" && "Controlled Workspace"}
               {activeView === "portfolio" && "Profile"}
@@ -315,6 +324,17 @@ export const Shell: React.FC<ShellProps> = ({
 
         {/* Main View Display */}
         <main id="main-content" className="flex-1 flex flex-col min-h-0 overflow-y-auto">
+          {activeView === "dashboard" && (
+            <ErrorBoundary fallbackTitle="Dashboard Error">
+              <DeveloperDashboardView
+                user={user}
+                onNavigateToRadar={() => setActiveView("radar")}
+                onNavigateToWorkspace={(id) => handleOpenWorkspace(id)}
+                onNavigateToProfile={() => setActiveView("portfolio")}
+              />
+            </ErrorBoundary>
+          )}
+
           {activeView === "radar" && (
             <ErrorBoundary fallbackTitle="Task Radar Error">
               <TaskRadarView onOpenWorkspace={handleOpenWorkspace} />
