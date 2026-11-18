@@ -1,0 +1,10 @@
+{
+  "name": "codebridge-ui",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix freelancer run dev",
+    "build": "npm --prefix freelancer run build",
+    "test": "npm --prefix freelancer run test",
+    "lint": "npm --prefix freelancer run lint"
+  }
+}
