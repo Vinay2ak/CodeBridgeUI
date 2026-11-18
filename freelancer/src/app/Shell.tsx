@@ -50,9 +50,29 @@ export const Shell: React.FC<ShellProps> = ({
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     currentTaskId || null
   );
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 1024;
+    }
+    return false;
+  });
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+
+  // Resize listener to adapt sidebar state when crossing breakpoints
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== "undefined") {
+        if (window.innerWidth < 1024) {
+          setIsSidebarOpen(false);
+        } else {
+          setIsSidebarOpen(true);
+        }
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Real backend query for projects list to auto-select real active project
   const { data: projects } = useQuery<ProjectScope[]>({
@@ -88,6 +108,17 @@ export const Shell: React.FC<ShellProps> = ({
       setSelectedProjectId(currentTaskId);
     }
   }, [currentTaskId]);
+
+  // Handle responsive resize when toggling device toolbar or changing viewports
+  useEffect(() => {
+    const handleResize = () => {
+      if (typeof window !== "undefined" && window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   // Keyboard shortcut listener for Ctrl+Shift+D and Escape for sidebar
   useEffect(() => {
@@ -263,20 +294,20 @@ export const Shell: React.FC<ShellProps> = ({
         }`}
       >
         {/* Top Header Navbar */}
-        <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-4 sm:px-6 backdrop-blur flex items-center justify-between gap-4 shrink-0">
-          <div className="flex items-center gap-3">
+        <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-3 sm:px-6 backdrop-blur flex items-center justify-between gap-2 sm:gap-4 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Three-line toggle button to reopen sidebar when collapsed */}
             {!isSidebarOpen && (
               <button
                 type="button"
                 onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+                className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors shrink-0"
                 aria-label="Show sidebar"
               >
                 <MenuIcon className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
-            <h1 className="text-sm sm:text-base font-bold text-ink">
+            <h1 className="text-sm sm:text-base font-bold text-ink truncate">
               {activeView === "dashboard" && "Developer Dashboard"}
               {activeView === "radar" && "Tasks Radar"}
               {activeView === "workspace" && "Controlled Workspace"}
@@ -284,13 +315,14 @@ export const Shell: React.FC<ShellProps> = ({
             </h1>
           </div>
 
-          {/* Right Section: Theme Toggle, Profile Menu (Offline/Online removed) */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
+          {/* Right Section: Theme Toggle, Profile Menu */}
+          <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
             <ThemeToggle />
 
             <Menu
               triggerLabel={
                 <span className="flex items-center gap-2">
+                  <UserIcon className="h-4 w-4 sm:hidden text-ink" aria-hidden="true" />
                   <span className="font-medium text-xs text-ink hidden sm:inline">
                     {user.displayName}
                   </span>

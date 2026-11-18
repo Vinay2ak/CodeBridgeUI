@@ -139,7 +139,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                 </span>
 
                 {availableProjects.length > 1 && (
-                  <div className="flex items-center gap-1.5 ml-2">
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1 sm:mt-0 sm:ml-2">
                     <span className="text-[11px] text-muted">Switch Task:</span>
                     <Select
                       size="sm"
@@ -150,7 +150,7 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                         label: `${p.title.slice(0, 40)} (${p.id})`,
                       }))}
                       aria-label="Switch Task"
-                      className="min-w-[180px] max-w-[280px]"
+                      className="w-full sm:w-auto min-w-[160px] sm:min-w-[180px] max-w-full sm:max-w-[280px]"
                     />
                   </div>
                 )}

@@ -48,8 +48,8 @@ export const AnalyticsEmbedCard: React.FC<AnalyticsEmbedCardProps> = ({
 
   return (
     <div
-      className="relative w-full rounded-2xl border border-line bg-surface overflow-hidden shadow-sm flex flex-col"
-      style={{ height: 'clamp(580px, calc(100vh - 16rem), 960px)' }}
+      className="relative w-full max-w-full rounded-2xl border border-line bg-surface overflow-hidden shadow-sm flex flex-col"
+      style={{ height: 'clamp(460px, calc(100vh - 12rem), 920px)' }}
     >
       {/* 1. Not Configured State */}
       {state === 'not-configured' && (
