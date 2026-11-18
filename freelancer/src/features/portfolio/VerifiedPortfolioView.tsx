@@ -172,21 +172,6 @@ export const VerifiedPortfolioView: React.FC<VerifiedPortfolioViewProps> = ({
                 </div>
               </div>
             </div>
-
-            {/* Availability Status Badge */}
-            <div className="flex sm:flex-col items-center sm:items-end justify-between gap-2 shrink-0">
-              <span className="text-xs font-medium text-muted">Availability</span>
-              <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-line bg-canvas text-xs font-semibold text-ink">
-                <span className="h-2 w-2 rounded-full bg-success" />
-                <span>
-                  {currentData?.availability === "AVAILABLE"
-                    ? "Available for Tasks"
-                    : currentData?.availability === "OPEN_TO_OFFERS"
-                    ? "Open to Offers"
-                    : "Busy"}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Section Navigation Tabs: Developer Details vs Settings */}
