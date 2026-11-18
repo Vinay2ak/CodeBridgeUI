@@ -42,13 +42,21 @@ const RUNNER_IMAGE_OPTIONS: SelectOption[] = [
 interface VerifiedPortfolioViewProps {
   user?: User;
   onNavigateToRadar?: () => void;
+  initialTab?: "profile" | "settings";
 }
 
 export const VerifiedPortfolioView: React.FC<VerifiedPortfolioViewProps> = ({
   user,
+  initialTab = "profile",
 }) => {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"profile" | "settings">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "settings">(initialTab);
+
+  React.useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
   const [copiedId, setCopiedId] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 

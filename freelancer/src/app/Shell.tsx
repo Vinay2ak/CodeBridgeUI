@@ -5,11 +5,8 @@ import {
   User as UserIcon,
   Settings,
   LogOut,
-  Radio,
-  Server,
-  Award,
   Menu as MenuIcon,
-  LayoutDashboard,
+  X,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
@@ -30,7 +27,7 @@ const DevDrawer = React.lazy(() =>
   import("../components/dev/DevDrawer").then((m) => ({ default: m.DevDrawer }))
 );
 
-type ActiveView = "dashboard" | "radar" | "workspace" | "portfolio";
+type ActiveView = "dashboard" | "radar" | "workspace" | "portfolio" | "settings";
 
 interface ShellProps {
   user: User;
@@ -147,35 +144,36 @@ export const Shell: React.FC<ShellProps> = ({
   const navItems = [
     {
       key: "dashboard" as const,
-      label: "Dashboard",
-      icon: LayoutDashboard,
-      description: "Overview, earnings & stats",
+      label: "Overview",
     },
     {
       key: "radar" as const,
-      label: "Tasks",
-      icon: Radio,
-      description: "Inspect & accept scopes",
+      label: "Projects",
     },
     {
       key: "workspace" as const,
       label: "Workspace",
-      icon: Server,
-      description: "Docker test runner & submit",
     },
     {
       key: "portfolio" as const,
       label: "Profile",
-      icon: Award,
-      description: "Verified profile & engineering records",
+    },
+    {
+      key: "settings" as const,
+      label: "Settings",
     },
   ];
 
   const userMenuItems: MenuItem[] = [
     {
-      label: "Account",
-      icon: <Settings className="h-4 w-4" aria-hidden="true" />,
+      label: "Profile",
+      icon: <UserIcon className="h-4 w-4" aria-hidden="true" />,
       onClick: () => setActiveView("portfolio"),
+    },
+    {
+      label: "Settings",
+      icon: <Settings className="h-4 w-4" aria-hidden="true" />,
+      onClick: () => setActiveView("settings"),
     },
     {
       label: "Sign out",
@@ -188,10 +186,9 @@ export const Shell: React.FC<ShellProps> = ({
   ];
 
   const sidebarNavigation = (
-    <nav aria-label="Freelancer sidebar navigation" className="space-y-1">
+    <nav aria-label="Freelancer sidebar navigation" className="flex flex-col gap-1">
       {navItems.map((item) => {
         const isActive = activeView === item.key;
-        const IconComponent = item.icon;
         return (
           <button
             key={item.key}
@@ -203,22 +200,13 @@ export const Shell: React.FC<ShellProps> = ({
               }
             }}
             aria-current={isActive ? "page" : undefined}
-            className={`w-full flex items-center gap-3 px-3 py-2.5 text-xs rounded-lg transition-all text-left ${
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors text-left focus-visible:outline-2 focus-visible:outline-primary ${
               isActive
-                ? "bg-primary/15 text-primary font-bold border-l-2 border-primary shadow-sm"
-                : "text-muted hover:text-ink hover:bg-raised font-medium"
+                ? "bg-primary/15 text-primary font-bold border-l-2 border-primary"
+                : "text-muted hover:text-ink hover:bg-raised"
             }`}
           >
-            <IconComponent
-              className={`h-4 w-4 shrink-0 ${isActive ? "text-primary" : "text-muted"}`}
-              aria-hidden="true"
-            />
-            <div className="flex-1 min-w-0">
-              <span className="block truncate">{item.label}</span>
-              <span className="block text-[10px] text-muted truncate font-normal">
-                {item.description}
-              </span>
-            </div>
+            {item.label}
           </button>
         );
       })}
@@ -247,42 +235,30 @@ export const Shell: React.FC<ShellProps> = ({
       {/* Sliding Collapsible Sidebar */}
       <aside
         aria-label="Freelancer Sidebar Navigation"
-        className={`fixed inset-y-0 left-0 z-40 lg:z-30 w-64 flex flex-col border-r border-line bg-surface shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
+        className={`fixed inset-y-0 left-0 z-40 lg:z-30 w-64 max-w-xs flex flex-col border-r border-line bg-surface shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Sidebar Header / Logo with three-line toggle */}
-        <div className="flex h-14 items-center justify-between px-4 border-b border-line">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-info-bg border border-info-border flex items-center justify-center text-primary">
-              <Code2 className="h-5 w-5" aria-hidden="true" />
-            </div>
-            <div>
-              <span className="font-bold text-base tracking-tight text-ink block leading-none">
-                CodeBridge
-              </span>
-              <span className="text-[10px] font-mono text-muted uppercase tracking-wider block mt-1">
-                Freelancer Portal
-              </span>
-            </div>
+        {/* Sidebar Header / Logo with clean CodeBridge and X close button (Matches Picture 2!) */}
+        <div className="flex h-16 items-center justify-between px-4 border-b border-line">
+          <div className="flex items-center gap-2">
+            <Code2 className="w-5 h-5 text-primary" aria-hidden="true" />
+            <span className="font-bold text-base text-ink tracking-tight">CodeBridge</span>
           </div>
 
-          {/* Three-line toggle button inside sidebar header to slide/hide */}
+          {/* Clean X button to close navigation menu */}
           <button
             type="button"
             onClick={() => setIsSidebarOpen(false)}
-            aria-label="Hide sidebar"
-            className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+            aria-label="Close navigation menu"
+            className="p-1.5 rounded-md text-muted hover:text-ink hover:bg-raised transition-colors cursor-pointer"
           >
-            <MenuIcon className="h-4 w-4" aria-hidden="true" />
+            <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
 
         {/* Sidebar Navigation Items */}
-        <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
-          <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-muted font-bold">
-            Navigation
-          </div>
+        <div className="flex-1 overflow-y-auto py-2">
           {sidebarNavigation}
         </div>
       </aside>
@@ -308,10 +284,11 @@ export const Shell: React.FC<ShellProps> = ({
               </button>
             )}
             <h1 className="text-sm sm:text-base font-bold text-ink truncate">
-              {activeView === "dashboard" && "Developer Dashboard"}
-              {activeView === "radar" && "Tasks Radar"}
+              {activeView === "dashboard" && "Overview"}
+              {activeView === "radar" && "Projects"}
               {activeView === "workspace" && "Controlled Workspace"}
               {activeView === "portfolio" && "Profile"}
+              {activeView === "settings" && "Settings"}
             </h1>
           </div>
 
@@ -378,6 +355,17 @@ export const Shell: React.FC<ShellProps> = ({
             <ErrorBoundary fallbackTitle="Verified Portfolio Error">
               <VerifiedPortfolioView
                 user={user}
+                initialTab="profile"
+                onNavigateToRadar={() => setActiveView("radar")}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeView === "settings" && (
+            <ErrorBoundary fallbackTitle="Settings Error">
+              <VerifiedPortfolioView
+                user={user}
+                initialTab="settings"
                 onNavigateToRadar={() => setActiveView("radar")}
               />
             </ErrorBoundary>
