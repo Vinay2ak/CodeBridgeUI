@@ -360,7 +360,10 @@ export const Shell: React.FC<ShellProps> = ({
 
           {activeView === "portfolio" && (
             <ErrorBoundary fallbackTitle="Verified Portfolio Error">
-              <VerifiedPortfolioView onNavigateToRadar={() => setActiveView("radar")} />
+              <VerifiedPortfolioView
+                user={user}
+                onNavigateToRadar={() => setActiveView("radar")}
+              />
             </ErrorBoundary>
           )}
         </main>

@@ -1,6 +1,6 @@
 import { request } from "../../lib/http";
 import { env } from "../../lib/env";
-import type { PortfolioSummary } from "./types";
+import type { PortfolioSummary, FreelancerProfileData } from "./types";
 import { adaptPortfolioSummary, adaptVerifiedWorkRecord } from "./adapters";
 
 export const DEFAULT_VERIFIED_RECORDS = [
@@ -162,5 +162,100 @@ export const profileApi = {
     }
 
     return [];
+  },
+
+  async getFreelancerProfile(fallbackUser?: { displayName?: string; email?: string }): Promise<FreelancerProfileData> {
+    const defaults: FreelancerProfileData = {
+      displayName: fallbackUser?.displayName || "Freelancer",
+      email: fallbackUser?.email || "freelancer@codebridge.dev",
+      headline: "Senior Full-Stack & Systems Engineer",
+      bio: "Passionate software engineer building resilient microservices, deterministic test automation, and robust web applications with modern tech stacks.",
+      githubUsername: "codebridge-dev",
+      experienceYears: 5,
+      availability: "AVAILABLE",
+      skills: ["Python", "FastAPI", "React", "TypeScript", "PostgreSQL", "Docker", "Pytest", "AsyncIO"],
+      preferredStack: "Python / TypeScript Full Stack",
+      notifications: {
+        newMatchingTasks: true,
+        escrowUpdates: true,
+        testGateResults: true,
+        clientMessages: true,
+      },
+      workspaceSettings: {
+        defaultImage: "codebridge/runner:python3.11",
+        autoRunTests: true,
+        isolatedNetwork: true,
+      },
+    };
+
+    if (typeof localStorage !== "undefined") {
+      try {
+        const stored = localStorage.getItem("cb_freelancer_profile");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          return {
+            ...defaults,
+            ...parsed,
+            notifications: { ...defaults.notifications, ...(parsed.notifications || {}) },
+            workspaceSettings: { ...defaults.workspaceSettings, ...(parsed.workspaceSettings || {}) },
+          };
+        }
+      } catch {}
+    }
+
+    try {
+      const res = await request<any>("/api/v1/profile");
+      if (res) {
+        const p = res.freelancer_profile || res.profile || res;
+        const skills = Array.isArray(p.skills) && p.skills.length > 0 ? p.skills : defaults.skills;
+        return {
+          ...defaults,
+          displayName: res.full_name || res.displayName || defaults.displayName,
+          email: res.email || defaults.email,
+          headline: p.headline || defaults.headline,
+          bio: p.bio || defaults.bio,
+          githubUsername: p.githubUsername || p.github_username || defaults.githubUsername,
+          experienceYears: Number(p.experience_years) || defaults.experienceYears,
+          skills,
+        };
+      }
+    } catch {}
+
+    return defaults;
+  },
+
+  async updateFreelancerProfile(data: Partial<FreelancerProfileData>): Promise<FreelancerProfileData> {
+    // 1. Save locally
+    if (typeof localStorage !== "undefined") {
+      try {
+        const existing = await this.getFreelancerProfile();
+        const updated = { ...existing, ...data };
+        localStorage.setItem("cb_freelancer_profile", JSON.stringify(updated));
+      } catch {}
+    }
+
+    // 2. Sync to backend endpoints if available
+    try {
+      await request<any>("/api/v1/freelancers/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          bio: data.bio,
+          skills: data.skills,
+          experience_years: data.experienceYears,
+          availability: data.availability,
+        }),
+      });
+    } catch {}
+
+    try {
+      await request<any>("/api/v1/profile", {
+        method: "PATCH",
+        body: JSON.stringify({
+          full_name: data.displayName,
+        }),
+      });
+    } catch {}
+
+    return this.getFreelancerProfile();
   },
 };
