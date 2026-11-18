@@ -281,15 +281,17 @@ export const Shell: React.FC<ShellProps> = ({
         {/* Top Header Navbar */}
         <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-4 sm:px-6 backdrop-blur flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-3">
-            {/* Three-line toggle button to show/hide sidebar */}
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen((prev) => !prev)}
-              className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
-              aria-label={isSidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            >
-              <MenuIcon className="h-5 w-5" aria-hidden="true" />
-            </button>
+            {/* Three-line toggle button to reopen sidebar when collapsed */}
+            {!isSidebarOpen && (
+              <button
+                type="button"
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors"
+                aria-label="Show sidebar"
+              >
+                <MenuIcon className="h-5 w-5" aria-hidden="true" />
+              </button>
+            )}
             <h1 className="text-sm sm:text-base font-bold text-ink">
               {activeView === "dashboard" && "Developer Dashboard"}
               {activeView === "radar" && "Tasks Radar"}
