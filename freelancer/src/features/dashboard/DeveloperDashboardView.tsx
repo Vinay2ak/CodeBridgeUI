@@ -21,7 +21,6 @@ import type { ProjectScope } from "../../services/project/types";
 import type { User } from "../../session/session";
 import { formatCurrencyINR } from "../../lib/format";
 import { Button } from "../../components/ui/Button";
-import { AnalyticsPage } from "../analytics/AnalyticsPage";
 
 interface DeveloperDashboardViewProps {
   user: User;
@@ -281,11 +280,6 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
             </div>
           </div>
         </div>
-
-        {/* Real-time Grafana Telemetry & Personal Analytics */}
-        <section aria-label="Personal Analytics" className="pt-2">
-          <AnalyticsPage showHeader={false} user={user} />
-        </section>
       </div>
     </div>
   );
