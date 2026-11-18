@@ -5,8 +5,6 @@ import {
   User as UserIcon,
   Settings,
   LogOut,
-  Keyboard,
-  Wrench,
   Radio,
   Server,
   Award,
@@ -146,22 +144,8 @@ export const Shell: React.FC<ShellProps> = ({
     {
       label: "Account",
       icon: <Settings className="h-4 w-4" aria-hidden="true" />,
-      href: env.accountUrl,
+      onClick: () => setActiveView("portfolio"),
     },
-    {
-      label: "Keyboard shortcuts",
-      icon: <Keyboard className="h-4 w-4" aria-hidden="true" />,
-      onClick: () => setShortcutsOpen(true),
-    },
-    ...(env.devTools
-      ? [
-          {
-            label: "Dev Diagnostics (Ctrl+Shift+D)",
-            icon: <Wrench className="h-4 w-4" aria-hidden="true" />,
-            onClick: () => setDevDrawerOpen(true),
-          },
-        ]
-      : []),
     {
       label: "Sign out",
       icon: <LogOut className="h-4 w-4" aria-hidden="true" />,
