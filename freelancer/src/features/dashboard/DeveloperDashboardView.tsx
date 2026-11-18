@@ -106,7 +106,7 @@ export const DeveloperDashboardView: React.FC<DeveloperDashboardViewProps> = ({
         </div>
 
         {/* 6 Metric Section Boxes (Requested by User) */}
-        <div>
+        <div id="performance-metrics">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs sm:text-sm font-bold uppercase tracking-wider text-muted flex items-center gap-2">
               <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />

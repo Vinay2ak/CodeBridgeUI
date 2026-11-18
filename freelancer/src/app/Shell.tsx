@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Code2,
@@ -28,6 +28,7 @@ const DevDrawer = React.lazy(() =>
 );
 
 type ActiveView = "dashboard" | "radar" | "workspace" | "portfolio" | "settings";
+type NavKey = "overview" | "projects" | "payments" | "activity" | "settings";
 
 interface ShellProps {
   user: User;
@@ -44,31 +45,41 @@ export const Shell: React.FC<ShellProps> = ({
 }) => {
   void hasTasks;
   const [activeView, setActiveView] = useState<ActiveView>("dashboard");
+  const [activeNavKey, setActiveNavKey] = useState<NavKey>("overview");
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
     currentTaskId || null
   );
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return window.innerWidth >= 1024;
-    }
-    return false;
-  });
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
 
-  // Resize listener to adapt sidebar state when crossing breakpoints
+  // Escape listener closes the navigation drawer and returns focus to menu button
   useEffect(() => {
-    const handleResize = () => {
-      if (typeof window !== "undefined") {
-        if (window.innerWidth < 1024) {
-          setIsSidebarOpen(false);
-        } else {
-          setIsSidebarOpen(true);
-        }
+    if (!isMenuOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setIsMenuOpen(false);
+        menuButtonRef.current?.focus();
       }
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isMenuOpen]);
+
+  // Dev tools shortcut listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (env.devTools && e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        setDevDrawerOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Real backend query for projects list to auto-select real active project
@@ -106,63 +117,43 @@ export const Shell: React.FC<ShellProps> = ({
     }
   }, [currentTaskId]);
 
-  // Handle responsive resize when toggling device toolbar or changing viewports
-  useEffect(() => {
-    const handleResize = () => {
-      if (typeof window !== "undefined" && window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      }
-    };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+  const navItems: { key: NavKey; label: string }[] = [
+    { key: "overview", label: "Overview" },
+    { key: "projects", label: "Projects" },
+    { key: "payments", label: "Payments" },
+    { key: "activity", label: "Activity" },
+    { key: "settings", label: "Settings" },
+  ];
 
-  // Keyboard shortcut listener for Ctrl+Shift+D and Escape for sidebar
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isSidebarOpen && typeof window !== "undefined" && window.innerWidth < 1024) {
-        setIsSidebarOpen(false);
-      }
-      if (env.devTools && e.ctrlKey && e.shiftKey && (e.key === "D" || e.key === "d")) {
-        e.preventDefault();
-        setDevDrawerOpen((prev) => !prev);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isSidebarOpen]);
+  const handleNavSelect = (key: NavKey) => {
+    setActiveNavKey(key);
+    setIsMenuOpen(false);
+    menuButtonRef.current?.focus();
+
+    if (key === "overview") {
+      setActiveView("dashboard");
+    } else if (key === "projects") {
+      setActiveView("radar");
+    } else if (key === "payments") {
+      setActiveView("dashboard");
+      setTimeout(() => {
+        const el = document.getElementById("performance-metrics") || document.getElementById("analytics");
+        el?.scrollIntoView({ behavior: "smooth" });
+      }, 50);
+    } else if (key === "activity") {
+      setActiveView("workspace");
+    } else if (key === "settings") {
+      setActiveView("settings");
+    }
+  };
 
   const handleOpenWorkspace = (projectId: string) => {
     setSelectedProjectId(projectId);
     onSelectTask(projectId);
     setActiveView("workspace");
-    if (typeof window !== "undefined" && window.innerWidth < 1024) {
-      setIsSidebarOpen(false);
-    }
+    setActiveNavKey("activity");
+    setIsMenuOpen(false);
   };
-
-  const navItems = [
-    {
-      key: "dashboard" as const,
-      label: "Overview",
-    },
-    {
-      key: "radar" as const,
-      label: "Projects",
-    },
-    {
-      key: "workspace" as const,
-      label: "Workspace",
-    },
-    {
-      key: "portfolio" as const,
-      label: "Profile",
-    },
-    {
-      key: "settings" as const,
-      label: "Settings",
-    },
-  ];
 
   const userMenuItems: MenuItem[] = [
     {
@@ -186,21 +177,15 @@ export const Shell: React.FC<ShellProps> = ({
   ];
 
   const sidebarNavigation = (
-    <nav aria-label="Freelancer sidebar navigation" className="flex flex-col gap-1">
+    <nav aria-label="Section navigation" className="flex flex-col gap-1 p-3">
       {navItems.map((item) => {
-        const isActive = activeView === item.key;
+        const isActive = activeNavKey === item.key;
         return (
           <button
             key={item.key}
             type="button"
-            onClick={() => {
-              setActiveView(item.key);
-              if (typeof window !== "undefined" && window.innerWidth < 1024) {
-                setIsSidebarOpen(false);
-              }
-            }}
-            aria-current={isActive ? "page" : undefined}
-            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors text-left focus-visible:outline-2 focus-visible:outline-primary ${
+            onClick={() => handleNavSelect(item.key)}
+            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors text-left focus-visible:outline-2 focus-visible:outline-primary cursor-pointer ${
               isActive
                 ? "bg-primary/15 text-primary font-bold border-l-2 border-primary"
                 : "text-muted hover:text-ink hover:bg-raised"
@@ -223,72 +208,80 @@ export const Shell: React.FC<ShellProps> = ({
         Skip to main content
       </a>
 
-      {/* Mobile Backdrop (< 1024px) */}
-      {isSidebarOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-30 bg-overlay backdrop-blur-sm transition-opacity"
-          onClick={() => setIsSidebarOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sliding Collapsible Sidebar */}
-      <aside
-        aria-label="Freelancer Sidebar Navigation"
-        className={`fixed inset-y-0 left-0 z-40 lg:z-30 w-64 max-w-xs flex flex-col border-r border-line bg-surface shadow-2xl lg:shadow-none transition-transform duration-300 ease-in-out ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      {/* Slide-over navigation drawer (Matches reference image!) */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+        className={`fixed inset-0 z-50 flex transition-opacity duration-200 ${
+          isMenuOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         }`}
       >
-        {/* Sidebar Header / Logo with clean CodeBridge and X close button (Matches Picture 2!) */}
-        <div className="flex h-16 items-center justify-between px-4 border-b border-line">
-          <div className="flex items-center gap-2">
-            <Code2 className="w-5 h-5 text-primary" aria-hidden="true" />
-            <span className="font-bold text-base text-ink tracking-tight">CodeBridge</span>
+        {/* Backdrop */}
+        <div
+          className={`fixed inset-0 bg-overlay/80 backdrop-blur-sm transition-opacity duration-200 ${
+            isMenuOpen ? "opacity-100" : "opacity-0"
+          }`}
+          onClick={() => {
+            setIsMenuOpen(false);
+            menuButtonRef.current?.focus();
+          }}
+        />
+
+        {/* Drawer content */}
+        <div
+          ref={drawerRef}
+          className={`relative flex flex-col w-64 max-w-xs bg-surface border-r border-line shadow-2xl z-10 transform transition-transform duration-200 ease-in-out ${
+            isMenuOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          <div className="flex h-16 items-center justify-between px-4 border-b border-line">
+            <div className="flex items-center gap-2">
+              <Code2 className="w-5 h-5 text-primary" aria-hidden="true" />
+              <span className="font-bold text-base text-ink tracking-tight">CodeBridge</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsMenuOpen(false);
+                menuButtonRef.current?.focus();
+              }}
+              aria-label="Close navigation menu"
+              className="p-1.5 rounded-md text-muted hover:text-ink hover:bg-raised transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" aria-hidden="true" />
+            </button>
           </div>
 
-          {/* Clean X button to close navigation menu */}
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(false)}
-            aria-label="Close navigation menu"
-            className="p-1.5 rounded-md text-muted hover:text-ink hover:bg-raised transition-colors cursor-pointer"
-          >
-            <X className="w-5 h-5" aria-hidden="true" />
-          </button>
+          <div className="flex-1 overflow-y-auto py-2">
+            {sidebarNavigation}
+          </div>
         </div>
+      </div>
 
-        {/* Sidebar Navigation Items */}
-        <div className="flex-1 overflow-y-auto py-2">
-          {sidebarNavigation}
-        </div>
-      </aside>
-
-      {/* Main Application Layout (Smoothly shifts when sidebar opens/closes) */}
-      <div
-        className={`flex flex-col min-h-screen transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? "lg:pl-64" : "lg:pl-0"
-        }`}
-      >
-        {/* Top Header Navbar */}
-        <header className="h-14 sticky top-0 z-20 border-b border-line bg-surface/95 px-3 sm:px-6 backdrop-blur flex items-center justify-between gap-2 sm:gap-4 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            {/* Three-line toggle button to reopen sidebar when collapsed */}
-            {!isSidebarOpen && (
-              <button
-                type="button"
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded-lg border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors shrink-0"
-                aria-label="Show sidebar"
-              >
-                <MenuIcon className="h-5 w-5" aria-hidden="true" />
-              </button>
-            )}
-            <h1 className="text-sm sm:text-base font-bold text-ink truncate">
-              {activeView === "dashboard" && "Overview"}
-              {activeView === "radar" && "Projects"}
-              {activeView === "workspace" && "Controlled Workspace"}
-              {activeView === "portfolio" && "Profile"}
-              {activeView === "settings" && "Settings"}
+      {/* Main Application Layout (Full width, not permanently pushed by sidebar) */}
+      <div className="flex flex-col min-h-screen w-full">
+        {/* Semantic Header / Topbar */}
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 sm:gap-4 border-b border-line bg-surface/95 px-3.5 sm:px-6 backdrop-blur shrink-0">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            {/* Hamburger menu button (3-line menu) */}
+            <button
+              ref={menuButtonRef}
+              type="button"
+              onClick={() => setIsMenuOpen(true)}
+              aria-label="Open navigation menu"
+              aria-expanded={isMenuOpen}
+              className="p-2 rounded-md border border-line bg-surface text-muted hover:text-ink hover:bg-raised transition-colors shrink-0 cursor-pointer"
+            >
+              <MenuIcon className="w-5 h-5" aria-hidden="true" />
+            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Code2 className="w-6 h-6 text-primary" aria-hidden="true" />
+              <span className="font-bold text-lg tracking-tight text-ink">CodeBridge</span>
+            </div>
+            <span className="hidden sm:inline-block text-line mx-1 shrink-0">|</span>
+            <h1 className="hidden sm:inline-block text-base sm:text-lg font-semibold truncate text-ink">
+              Freelancer Portal
             </h1>
           </div>
 
