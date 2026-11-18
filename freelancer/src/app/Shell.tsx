@@ -10,14 +10,12 @@ import {
   Award,
   Menu as MenuIcon,
   LayoutDashboard,
-  BarChart3,
 } from "lucide-react";
 import { env } from "../lib/env";
 import { sessionStore, User } from "../session/session";
 import { projectApi } from "../services/project/api";
 import type { ProjectScope } from "../services/project/types";
 import { DeveloperDashboardView } from "../features/dashboard/DeveloperDashboardView";
-import { AnalyticsPage } from "../features/analytics/AnalyticsPage";
 import { TaskRadarView } from "../features/radar/TaskRadarView";
 import { ControlledWorkspaceView } from "../features/workspace/ControlledWorkspaceView";
 import { VerifiedPortfolioView } from "../features/portfolio/VerifiedPortfolioView";
@@ -32,7 +30,7 @@ const DevDrawer = React.lazy(() =>
   import("../components/dev/DevDrawer").then((m) => ({ default: m.DevDrawer }))
 );
 
-type ActiveView = "dashboard" | "analytics" | "radar" | "workspace" | "portfolio";
+type ActiveView = "dashboard" | "radar" | "workspace" | "portfolio";
 
 interface ShellProps {
   user: User;
@@ -121,12 +119,6 @@ export const Shell: React.FC<ShellProps> = ({
       label: "Dashboard",
       icon: LayoutDashboard,
       description: "Overview, earnings & stats",
-    },
-    {
-      key: "analytics" as const,
-      label: "Analytics",
-      icon: BarChart3,
-      description: "Grafana telemetry & live metrics",
     },
     {
       key: "radar" as const,
@@ -326,16 +318,6 @@ export const Shell: React.FC<ShellProps> = ({
                 onNavigateToWorkspace={(id) => handleOpenWorkspace(id)}
                 onNavigateToProfile={() => setActiveView("portfolio")}
               />
-            </ErrorBoundary>
-          )}
-
-          {activeView === "analytics" && (
-            <ErrorBoundary fallbackTitle="Analytics Error">
-              <div className="flex-1 overflow-y-auto bg-canvas p-4 sm:p-6 lg:p-8 text-ink">
-                <div className="max-w-7xl mx-auto">
-                  <AnalyticsPage showHeader={true} user={user} />
-                </div>
-              </div>
             </ErrorBoundary>
           )}
 
