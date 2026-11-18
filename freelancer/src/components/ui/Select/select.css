@@ -4,6 +4,13 @@
   --sel-border: var(--control-border, color-mix(in srgb, var(--text-muted) 65%, var(--surface)));
   --sel-bg: var(--input-bg, var(--surface));
   --sel-shadow: var(--shadow-md, 0 12px 32px color-mix(in srgb, black 28%, transparent));
+  --sel-highlight-bg: color-mix(in srgb, var(--money) 75%, black);
+  --sel-highlight-border: color-mix(in srgb, var(--money) 85%, black);
+}
+
+:root[data-theme="light"] {
+  --sel-highlight-bg: color-mix(in srgb, var(--warning) 82%, black);
+  --sel-highlight-border: color-mix(in srgb, var(--warning) 92%, black);
 }
 
 /* Trigger Button */
@@ -192,7 +199,9 @@
   left: 0;
   right: 0;
   border-radius: 8px;
-  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+  background-color: var(--sel-highlight-bg);
+  border: 1px solid var(--sel-highlight-border);
+  box-sizing: border-box;
   pointer-events: none;
   transition: top 140ms ease-out, height 140ms ease-out, opacity 100ms ease-out;
   z-index: 0;
@@ -261,6 +270,28 @@
   color: var(--primary);
   flex-shrink: 0;
   animation: cb-select-check-in 160ms ease-out;
+}
+
+/* Active Option (over sliding brown highlight) - high-contrast visible text */
+.cb-select-option[data-active="true"] {
+  color: color-mix(in srgb, white 98%, transparent);
+}
+
+.cb-select-option[data-active="true"] .cb-select-option-label {
+  color: color-mix(in srgb, white 98%, transparent);
+  font-weight: 600;
+}
+
+.cb-select-option[data-active="true"] .cb-select-option-description {
+  color: color-mix(in srgb, white 85%, transparent);
+}
+
+.cb-select-option[data-active="true"] .cb-select-check-icon {
+  color: color-mix(in srgb, white 98%, transparent);
+}
+
+.cb-select-option[data-active="true"] .cb-select-tone-dot {
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, white 40%, transparent);
 }
 
 /* First 8 items stagger entrance animation */

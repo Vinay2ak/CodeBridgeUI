@@ -215,6 +215,7 @@ export const Select: React.FC<SelectProps> = ({
                     aria-selected={isSelected}
                     aria-disabled={opt.disabled ? "true" : undefined}
                     data-index={index < 8 ? index : undefined}
+                    data-active={activeIndex === index ? "true" : undefined}
                     className="cb-select-option"
                     onPointerEnter={() => {
                       if (!opt.disabled) {
