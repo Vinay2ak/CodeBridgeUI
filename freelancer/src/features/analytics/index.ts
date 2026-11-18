@@ -1,4 +1,10 @@
 export { AnalyticsPage } from './AnalyticsPage';
 export type { AnalyticsPageProps } from './AnalyticsPage';
-export { parseGrafanaUrl, buildEmbedUrl, buildOpenUrl } from './grafanaUrl';
+export { AnalyticsSection } from './AnalyticsSection';
+export type { AnalyticsSectionProps } from './AnalyticsSection';
+export { PanelCard } from './PanelCard';
+export type { PanelCardProps } from './PanelCard';
+export { parseGrafanaUrl, buildPanelUrl, buildEmbedUrl, buildOpenUrl } from './grafanaUrl';
 export type { TimeRange, RefreshInterval, AppTheme } from './grafanaUrl';
+export { ANALYTICS_PANELS, SHOW_STAT_PANELS, ANALYTICS_VARIABLE } from './panels.config';
+export type { PanelSpec } from './panels.config';

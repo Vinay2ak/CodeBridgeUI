@@ -3,6 +3,7 @@ import {
   parseGrafanaUrl,
   buildEmbedUrl,
   buildOpenUrl,
+  buildPanelUrl,
   type ParsedGrafanaUrl,
 } from './grafanaUrl';
 
@@ -101,5 +102,28 @@ describe('grafanaUrl module', () => {
       ownerId: 'usr-developer-999',
     });
     expect(new URL(userOpen).searchParams.get('var-owner_id')).toBe('usr-developer-999');
+  });
+
+  it('9. buildPanelUrl produces a valid d-solo URL with panelId, theme, range and owner filter', () => {
+    const raw = 'http://monitoring.local:3001/d/analytics/dashboard?orgId=1';
+    const parsed = parseGrafanaUrl(raw) as ParsedGrafanaUrl;
+
+    const panelUrl = buildPanelUrl(parsed, {
+      panelId: 5,
+      range: '24h',
+      refresh: '1m',
+      theme: 'light',
+      ownerId: 'usr-developer-999',
+    });
+
+    const urlObj = new URL(panelUrl);
+    expect(urlObj.pathname).toContain('/d-solo/');
+    expect(urlObj.searchParams.get('panelId')).toBe('5');
+    expect(urlObj.searchParams.get('orgId')).toBe('1');
+    expect(urlObj.searchParams.get('from')).toBe('now-24h');
+    expect(urlObj.searchParams.get('to')).toBe('now');
+    expect(urlObj.searchParams.get('theme')).toBe('light');
+    expect(urlObj.searchParams.get('refresh')).toBe('1m');
+    expect(urlObj.searchParams.get('var-owner_id')).toBe('usr-developer-999');
   });
 });
