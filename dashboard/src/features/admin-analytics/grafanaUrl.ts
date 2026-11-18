@@ -76,8 +76,10 @@ export function buildEmbedUrl(
 
   url.searchParams.set('theme', options.theme);
 
-  if (!url.searchParams.has('kiosk')) {
-    url.searchParams.set('kiosk', '');
+  // Set kiosk=tv to hide top search bar, breadcrumb navigation, and sidebars completely
+  const existingKiosk = url.searchParams.get('kiosk');
+  if (!existingKiosk || existingKiosk === '' || existingKiosk === '1') {
+    url.searchParams.set('kiosk', 'tv');
   }
 
   const ownerIdValue =

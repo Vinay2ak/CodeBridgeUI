@@ -48,7 +48,7 @@ export const AnalyticsEmbedCard: React.FC<AnalyticsEmbedCardProps> = ({
 
   return (
     <div
-      className="relative w-full rounded-xl border border-border bg-surface overflow-hidden shadow-sm flex flex-col"
+      className="relative w-full rounded-2xl border border-border bg-surface overflow-hidden shadow-sm flex flex-col"
       style={{ height: 'clamp(640px, calc(100vh - 16rem), 1100px)' }}
     >
       {/* 1. Not Configured State */}
@@ -89,13 +89,24 @@ export const AnalyticsEmbedCard: React.FC<AnalyticsEmbedCardProps> = ({
           </p>
           <div className="w-full max-w-4xl space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-              <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-              <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-              <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
+              {[1, 2, 3, 4].map((i) => (
+                <div
+                  key={i}
+                  className="h-24 rounded-xl bg-surface-raised border border-border/50 p-4 flex flex-col justify-between animate-pulse"
+                >
+                  <div className="h-3 w-20 rounded bg-border/40" />
+                  <div className="h-6 w-12 rounded bg-border/60" />
+                </div>
+              ))}
             </div>
-            <div className="h-44 rounded-lg bg-border/40 animate-pulse" />
-            <div className="h-44 rounded-lg bg-border/40 animate-pulse" />
+            <div className="h-44 rounded-xl bg-surface-raised border border-border/50 p-4 animate-pulse flex flex-col justify-between">
+              <div className="h-3 w-36 rounded bg-border/40" />
+              <div className="h-28 w-full rounded-lg bg-border/30" />
+            </div>
+            <div className="h-44 rounded-xl bg-surface-raised border border-border/50 p-4 animate-pulse flex flex-col justify-between">
+              <div className="h-3 w-40 rounded bg-border/40" />
+              <div className="h-28 w-full rounded-lg bg-border/30" />
+            </div>
           </div>
         </div>
       )}
@@ -155,18 +166,29 @@ export const AnalyticsEmbedCard: React.FC<AnalyticsEmbedCardProps> = ({
                   </Button>
                 </div>
               )}
-              <p className="text-sm font-medium text-text-muted animate-pulse">
-                Loading analytics…
-              </p>
+              <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-primary animate-pulse">
+                <span>Loading live telemetry stream…</span>
+              </div>
               <div className="w-full max-w-4xl space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-                  <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-                  <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
-                  <div className="h-24 rounded-lg bg-border/40 animate-pulse" />
+                  {[1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className="h-24 rounded-xl bg-surface-raised border border-border/50 p-4 flex flex-col justify-between animate-pulse"
+                    >
+                      <div className="h-3 w-20 rounded bg-border/40" />
+                      <div className="h-6 w-12 rounded bg-border/60" />
+                    </div>
+                  ))}
                 </div>
-                <div className="h-44 rounded-lg bg-border/40 animate-pulse" />
-                <div className="h-44 rounded-lg bg-border/40 animate-pulse" />
+                <div className="h-44 rounded-xl bg-surface-raised border border-border/50 p-4 animate-pulse flex flex-col justify-between">
+                  <div className="h-3 w-36 rounded bg-border/40" />
+                  <div className="h-28 w-full rounded-lg bg-border/30" />
+                </div>
+                <div className="h-44 rounded-xl bg-surface-raised border border-border/50 p-4 animate-pulse flex flex-col justify-between">
+                  <div className="h-3 w-40 rounded bg-border/40" />
+                  <div className="h-28 w-full rounded-lg bg-border/30" />
+                </div>
               </div>
             </div>
           )}
@@ -177,7 +199,9 @@ export const AnalyticsEmbedCard: React.FC<AnalyticsEmbedCardProps> = ({
             title="CodeBridge platform analytics (Grafana)"
             sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             referrerPolicy="no-referrer"
-            className="w-full h-full border-0"
+            className={`w-full h-full border-0 transition-opacity duration-500 ${
+              isIframeLoaded ? 'opacity-100' : 'opacity-0'
+            }`}
             onLoad={() => setIsIframeLoaded(true)}
           />
         </div>

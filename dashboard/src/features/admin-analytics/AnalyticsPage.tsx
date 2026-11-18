@@ -26,23 +26,31 @@ function getDocTheme(): AppTheme {
 export interface AnalyticsPageProps {
   showHeader?: boolean;
   ownerId?: string;
+  showToolbar?: boolean;
+  showStatusLine?: boolean;
 }
 
 export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   showHeader = true,
   ownerId,
+  showToolbar = false,
+  showStatusLine = false,
 }) => {
   const { user } = useSession();
 
   // Resolve effective owner ID for Grafana queries:
   // - If an explicit ownerId prop is passed, use it.
-  // - If the logged-in user is a project owner, use their user.id.
-  // - If the user is an admin or unauthenticated, default to 'All'.
+  // - If the logged-in user is a regular project owner, use their unique user.id.
+  // - If the user is an administrator or unauthenticated, default to 'All'.
   const effectiveOwnerId = useMemo(() => {
     if (ownerId !== undefined && ownerId !== null) {
       return ownerId.trim() || 'All';
     }
-    if (user && user.role === 'owner' && user.id) {
+    if (user && user.id && user.id !== 'anonymous' && user.id !== 'url-user') {
+      const role = (user.role || '').toLowerCase();
+      if (role === 'admin') {
+        return 'All';
+      }
       return user.id;
     }
     return 'All';
@@ -197,65 +205,69 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
         </div>
       )}
 
-      {/* 2. Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-lg border border-border bg-surface shadow-xs">
-        <div className="flex flex-wrap items-center gap-4">
-          <TimeRangeControl
-            value={prefs.range}
-            onChange={handleRangeChange}
-            disabled={!parsed.ok}
-          />
-          <AutoRefreshControl
-            value={prefs.refresh}
-            onChange={handleRefreshIntervalChange}
-            disabled={!parsed.ok}
-          />
-        </div>
+      {/* 2. Toolbar (Hidden by default per UI requirement) */}
+      {showToolbar && (
+        <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-lg border border-border bg-surface shadow-xs">
+          <div className="flex flex-wrap items-center gap-4">
+            <TimeRangeControl
+              value={prefs.range}
+              onChange={handleRangeChange}
+              disabled={!parsed.ok}
+            />
+            <AutoRefreshControl
+              value={prefs.refresh}
+              onChange={handleRefreshIntervalChange}
+              disabled={!parsed.ok}
+            />
+          </div>
 
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleManualRefresh}
-            disabled={!parsed.ok || isProbing}
-            aria-label="Refresh"
-            className="text-xs"
-          >
-            <RefreshCw className={`w-4 h-4 stroke-[1.5] ${isProbing ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
-
-          {openUrl ? (
-            <a
-              href={openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Open in Grafana (opens in a new tab)"
-              className="inline-flex items-center justify-center font-medium transition-colors duration-100 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer px-2.5 py-1 text-xs gap-1.5 bg-surface-raised text-text border border-border hover:bg-border/40"
+          <div className="flex items-center gap-2.5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleManualRefresh}
+              disabled={!parsed.ok || isProbing}
+              aria-label="Refresh"
+              className="text-xs"
             >
-              <ExternalLink className="w-4 h-4 stroke-[1.5]" />
-              Open in Grafana
-            </a>
-          ) : (
-            <button
-              type="button"
-              disabled
-              aria-label="Open in Grafana"
-              className="inline-flex items-center justify-center font-medium rounded-md opacity-50 pointer-events-none px-2.5 py-1 text-xs gap-1.5 bg-surface-raised text-text border border-border"
-            >
-              <ExternalLink className="w-4 h-4 stroke-[1.5]" />
-              Open in Grafana
-            </button>
-          )}
-        </div>
-      </div>
+              <RefreshCw className={`w-4 h-4 stroke-[1.5] ${isProbing ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
 
-      {/* 3. Status line */}
-      <StatusLine
-        status={statusLineState}
-        host={host}
-        lastChecked={lastChecked}
-      />
+            {openUrl ? (
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in Grafana (opens in a new tab)"
+                className="inline-flex items-center justify-center font-medium transition-colors duration-100 rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary cursor-pointer px-2.5 py-1 text-xs gap-1.5 bg-surface-raised text-text border border-border hover:bg-border/40"
+              >
+                <ExternalLink className="w-4 h-4 stroke-[1.5]" />
+                Open in Grafana
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                aria-label="Open in Grafana"
+                className="inline-flex items-center justify-center font-medium rounded-md opacity-50 pointer-events-none px-2.5 py-1 text-xs gap-1.5 bg-surface-raised text-text border border-border"
+              >
+                <ExternalLink className="w-4 h-4 stroke-[1.5]" />
+                Open in Grafana
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 3. Status line (Hidden by default per UI requirement) */}
+      {showStatusLine && (
+        <StatusLine
+          status={statusLineState}
+          host={host}
+          lastChecked={lastChecked}
+        />
+      )}
 
       {/* 4. Embed card */}
       <AnalyticsEmbedCard
