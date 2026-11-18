@@ -12,6 +12,7 @@ import { projectApi } from "../../services/project/api";
 import type { ProjectScope } from "../../services/project/types";
 import { Button } from "../../components/ui/Button";
 import { formatCurrencyINR } from "../../lib/format";
+import { Select } from "../../components/ui/Select";
 
 interface ControlledWorkspaceViewProps {
   projectId: string | null;
@@ -140,17 +141,17 @@ export const ControlledWorkspaceView: React.FC<ControlledWorkspaceViewProps> = (
                 {availableProjects.length > 1 && (
                   <div className="flex items-center gap-1.5 ml-2">
                     <span className="text-[11px] text-muted">Switch Task:</span>
-                    <select
+                    <Select
+                      size="sm"
                       value={activeProject.id}
-                      onChange={(e) => onSelectProject?.(e.target.value)}
-                      className="text-xs rounded-lg border border-line bg-surface px-2 py-1 text-ink font-medium focus:ring-1 focus:ring-primary focus:outline-none"
-                    >
-                      {availableProjects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.title.slice(0, 40)} ({p.id})
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(newId) => onSelectProject?.(newId)}
+                      options={availableProjects.map((p) => ({
+                        value: p.id,
+                        label: `${p.title.slice(0, 40)} (${p.id})`,
+                      }))}
+                      aria-label="Switch Task"
+                      className="min-w-[180px] max-w-[280px]"
+                    />
                   </div>
                 )}
               </div>

@@ -40,3 +40,37 @@
 - [x] Phase 3: Services and mocks
 - [x] Phase 4: Page shell, escrow bar, task panel, workspace status
 - [x] Phase 5: Packaging and docs
+
+---
+## Feature: modern Select
+1. Audit all native <select> elements across src and record list in PROGRESS.md.
+2. Implement pure selection and placement logic in src/components/ui/Select/logic.ts.
+3. Write comprehensive unit test suite in src/components/ui/Select/logic.test.ts (>=14 cases).
+4. Implement custom Select component with WAI-ARIA combobox, frosted glass popover, and select.css.
+5. Import select.css into src/main.tsx and verify design tokens without color literals.
+6. Replace all non-exempt native selects across features (portfolio availability, runner image, task switchers).
+7. Document API and keyboard shortcuts in README.md and update PROGRESS.md.
+8. Verify production build (npm run build) and vitest suite (npx vitest run).
+
+### Native Select Audit
+- `src/features/portfolio/VerifiedPortfolioView.tsx:380`: Freelancer availability status selection, 3 options, controlled value/onChange.
+- `src/features/portfolio/VerifiedPortfolioView.tsx:519`: Default workspace runner container image selection, 3 options, controlled value/onChange.
+- `src/features/task/TaskSwitcher.tsx:52`: Active workspace task switcher, dynamic options, controlled value/onChange.
+- `src/features/workspace/ControlledWorkspaceView.tsx:143`: Switch workspace task, dynamic options, controlled value/onChange.
+- Exception (retained native): `src/components/dev/DevDrawer.tsx:250`: Developer diagnostics test scenario picker (dev drawer internal diagnostic utility).
+
+### Replaced Files
+- `src/features/portfolio/VerifiedPortfolioView.tsx`:
+  - Replaced availability select with `<Select>` (tones: success, primary, muted).
+  - Replaced default runner image select with `<Select>`.
+- `src/features/task/TaskSwitcher.tsx`:
+  - Replaced task switcher select with `<Select size="sm">`.
+- `src/features/workspace/ControlledWorkspaceView.tsx`:
+  - Replaced task switch select with `<Select size="sm">`.
+
+### Phases
+- [x] Phase 1: Audit and pure logic (tested)
+- [x] Phase 2: The component (Select.tsx, useSelect.ts, select.css, index.ts)
+- [x] Phase 3: Replace every native select
+- [x] Phase 4: Docs and checks
+

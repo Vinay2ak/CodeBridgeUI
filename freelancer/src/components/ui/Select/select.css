@@ -1,0 +1,374 @@
+/* Modern Select - Frosted Glass Popover, Sliding Highlight & Restrained Motion */
+
+:root {
+  --sel-border: var(--control-border, color-mix(in srgb, var(--text-muted) 65%, var(--surface)));
+  --sel-bg: var(--input-bg, var(--surface));
+  --sel-shadow: var(--shadow-md, 0 12px 32px color-mix(in srgb, black 28%, transparent));
+}
+
+/* Trigger Button */
+.cb-select-trigger {
+  width: 100%;
+  height: 40px;
+  border-radius: 10px;
+  border: 1px solid var(--sel-border);
+  background-color: var(--sel-bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.4;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  user-select: none;
+  position: relative;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.cb-select-trigger.cb-select-sm {
+  height: 32px;
+  font-size: 12px;
+  padding: 0 10px;
+  border-radius: 8px;
+}
+
+.cb-select-trigger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--surface-raised) 45%, var(--sel-bg));
+}
+
+.cb-select-trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.cb-select-trigger.cb-select-open {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+.cb-select-trigger.cb-select-invalid {
+  border-color: var(--danger);
+}
+
+.cb-select-trigger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Trigger Content & Tone Dot */
+.cb-select-trigger-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cb-select-trigger-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: cb-select-label-in 120ms ease-out;
+}
+
+.cb-select-placeholder {
+  color: var(--text-muted);
+}
+
+.cb-select-tone-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.cb-select-tone-success {
+  background-color: var(--success);
+}
+
+.cb-select-tone-primary {
+  background-color: var(--primary);
+}
+
+.cb-select-tone-muted {
+  background-color: var(--text-muted);
+}
+
+/* Chevron */
+.cb-select-chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform 180ms ease, color 140ms ease;
+}
+
+.cb-select-open .cb-select-chevron {
+  transform: rotate(180deg);
+  color: var(--primary);
+}
+
+/* Popover listbox */
+.cb-select-popover {
+  position: fixed;
+  z-index: 1000;
+  border-radius: 12px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  background-color: color-mix(in srgb, var(--surface-raised) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(140%);
+  -webkit-backdrop-filter: blur(16px) saturate(140%);
+  box-shadow: var(--sel-shadow), inset 0 1px 0 color-mix(in srgb, white 22%, transparent);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+  box-sizing: border-box;
+}
+
+/* Faint Sheen Layer */
+.cb-select-popover::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  pointer-events: none;
+  border-radius: 11px 11px 0 0;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 7%, transparent), transparent);
+}
+
+/* Fallbacks for no backdrop-filter or reduced transparency */
+@supports not (backdrop-filter: blur(1px)) {
+  .cb-select-popover {
+    background-color: var(--surface-raised);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .cb-select-popover {
+    background-color: var(--surface-raised);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Popover Animations */
+.cb-select-popover[data-side="bottom"] {
+  transform-origin: top center;
+  animation: cb-select-open-bottom 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cb-select-popover[data-side="top"] {
+  transform-origin: bottom center;
+  animation: cb-select-open-top 160ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.cb-select-popover.cb-select-closing[data-side="bottom"] {
+  animation: cb-select-close-bottom 110ms ease-in forwards;
+}
+
+.cb-select-popover.cb-select-closing[data-side="top"] {
+  animation: cb-select-close-top 110ms ease-in forwards;
+}
+
+/* Popover Options Container */
+.cb-select-options-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Sliding Highlight Element */
+.cb-select-highlight {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-radius: 8px;
+  background-color: color-mix(in srgb, var(--primary) 12%, transparent);
+  pointer-events: none;
+  transition: top 140ms ease-out, height 140ms ease-out, opacity 100ms ease-out;
+  z-index: 0;
+}
+
+/* Option Row */
+.cb-select-option {
+  position: relative;
+  z-index: 1;
+  min-height: 40px;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  box-sizing: border-box;
+  color: var(--text);
+  font-size: 14px;
+  background: transparent;
+  transition: color 100ms ease;
+}
+
+.cb-select-option-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.cb-select-option-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.cb-select-option-label {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.3;
+}
+
+.cb-select-option-description {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.3;
+  margin-top: 2px;
+}
+
+.cb-select-option[aria-selected="true"] {
+  font-weight: 500;
+}
+
+.cb-select-option[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  color: var(--text-muted);
+}
+
+.cb-select-check-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--primary);
+  flex-shrink: 0;
+  animation: cb-select-check-in 160ms ease-out;
+}
+
+/* First 8 items stagger entrance animation */
+.cb-select-option[data-index="0"] { animation: cb-select-option-in 160ms ease-out 0ms both; }
+.cb-select-option[data-index="1"] { animation: cb-select-option-in 160ms ease-out 18ms both; }
+.cb-select-option[data-index="2"] { animation: cb-select-option-in 160ms ease-out 36ms both; }
+.cb-select-option[data-index="3"] { animation: cb-select-option-in 160ms ease-out 54ms both; }
+.cb-select-option[data-index="4"] { animation: cb-select-option-in 160ms ease-out 72ms both; }
+.cb-select-option[data-index="5"] { animation: cb-select-option-in 160ms ease-out 90ms both; }
+.cb-select-option[data-index="6"] { animation: cb-select-option-in 160ms ease-out 108ms both; }
+.cb-select-option[data-index="7"] { animation: cb-select-option-in 160ms ease-out 126ms both; }
+
+/* Keyframe animations */
+@keyframes cb-select-open-bottom {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cb-select-close-bottom {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+}
+
+@keyframes cb-select-open-top {
+  0% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cb-select-close-top {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+}
+
+@keyframes cb-select-option-in {
+  0% {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cb-select-check-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cb-select-label-in {
+  0% {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Reduced Motion Mode */
+@media (prefers-reduced-motion: reduce) {
+  .cb-select-trigger,
+  .cb-select-chevron,
+  .cb-select-popover,
+  .cb-select-highlight,
+  .cb-select-option,
+  .cb-select-check-icon,
+  .cb-select-trigger-label {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .cb-select-popover[data-side="bottom"],
+  .cb-select-popover[data-side="top"],
+  .cb-select-popover.cb-select-closing[data-side="bottom"],
+  .cb-select-popover.cb-select-closing[data-side="top"] {
+    animation: none !important;
+  }
+}

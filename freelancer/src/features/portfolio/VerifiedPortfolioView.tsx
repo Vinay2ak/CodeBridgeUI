@@ -25,6 +25,19 @@ import type { FreelancerProfileData } from "../../services/profile/types";
 import type { User } from "../../session/session";
 import { sessionStore } from "../../session/session";
 import { Button } from "../../components/ui/Button";
+import { Select, SelectOption } from "../../components/ui/Select";
+
+const AVAILABILITY_OPTIONS: SelectOption[] = [
+  { value: "AVAILABLE", label: "Available for Tasks", tone: "success" },
+  { value: "OPEN_TO_OFFERS", label: "Open to Offers", tone: "primary" },
+  { value: "BUSY", label: "Busy / Not Taking Tasks", tone: "muted" },
+];
+
+const RUNNER_IMAGE_OPTIONS: SelectOption[] = [
+  { value: "codebridge/runner:python3.11", label: "codebridge/runner:python3.11" },
+  { value: "codebridge/runner:node20", label: "codebridge/runner:node20" },
+  { value: "codebridge/runner:latest", label: "codebridge/runner:latest (Polyglot)" },
+];
 
 interface VerifiedPortfolioViewProps {
   user?: User;
@@ -374,23 +387,21 @@ export const VerifiedPortfolioView: React.FC<VerifiedPortfolioViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-ink block">
+                  <label htmlFor="availability-status" className="text-xs font-semibold text-ink block">
                     Availability Status
                   </label>
-                  <select
+                  <Select
+                    id="availability-status"
                     value={currentData.availability}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       setFormData({
                         ...currentData,
-                        availability: e.target.value as any,
+                        availability: val as any,
                       })
                     }
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-canvas border border-line text-ink focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="AVAILABLE">Available for Tasks</option>
-                    <option value="OPEN_TO_OFFERS">Open to Offers</option>
-                    <option value="BUSY">Busy / Not Taking Tasks</option>
-                  </select>
+                    options={AVAILABILITY_OPTIONS}
+                    aria-label="Availability Status"
+                  />
                 </div>
 
                 <div className="sm:col-span-2 space-y-1.5">
@@ -513,26 +524,24 @@ export const VerifiedPortfolioView: React.FC<VerifiedPortfolioViewProps> = ({
 
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-ink block">
+                  <label htmlFor="default-runner-image" className="text-xs font-semibold text-ink block">
                     Default Runner Image
                   </label>
-                  <select
+                  <Select
+                    id="default-runner-image"
                     value={currentData.workspaceSettings.defaultImage}
-                    onChange={(e) =>
+                    onChange={(val) =>
                       setFormData({
                         ...currentData,
                         workspaceSettings: {
                           ...currentData.workspaceSettings,
-                          defaultImage: e.target.value,
+                          defaultImage: val,
                         },
                       })
                     }
-                    className="w-full px-3.5 py-2 text-xs rounded-xl bg-canvas border border-line text-ink font-mono focus:outline-none focus:ring-1 focus:ring-primary"
-                  >
-                    <option value="codebridge/runner:python3.11">codebridge/runner:python3.11</option>
-                    <option value="codebridge/runner:node20">codebridge/runner:node20</option>
-                    <option value="codebridge/runner:latest">codebridge/runner:latest (Polyglot)</option>
-                  </select>
+                    options={RUNNER_IMAGE_OPTIONS}
+                    aria-label="Default Runner Image"
+                  />
                 </div>
 
                 <div className="flex items-center justify-between p-3 rounded-xl bg-canvas border border-line">

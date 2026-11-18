@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { workspaceApi } from "../../services/workspace/api";
 import { setTaskId } from "../../lib/taskParam";
+import { Select, SelectOption } from "../../components/ui/Select";
 
 interface TaskSwitcherProps {
   currentTaskId: string | null;
@@ -19,8 +20,7 @@ export const TaskSwitcher: React.FC<TaskSwitcherProps> = ({
 
   const tasks = data?.items || [];
 
-  const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const nextId = e.target.value;
+  const handleSelect = (nextId: string) => {
     setTaskId(nextId);
     onSelectTask(nextId);
   };
@@ -44,23 +44,25 @@ export const TaskSwitcher: React.FC<TaskSwitcherProps> = ({
     );
   }
 
+  const taskOptions: SelectOption[] = tasks.map((task) => ({
+    value: task.id,
+    label: `${task.title} (${getStatusLabel(task.status)})`,
+  }));
+
   return (
     <div className="flex items-center gap-2">
       <label htmlFor="task-switcher" className="sr-only">
         Active task
       </label>
-      <select
+      <Select
         id="task-switcher"
+        size="sm"
         value={currentTaskId || (tasks[0]?.id ?? "")}
-        onChange={handleChange}
-        className="h-9 rounded-lg border border-line-strong bg-input px-3 text-sm text-ink font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary cursor-pointer max-w-[260px] truncate"
-      >
-        {tasks.map((task) => (
-          <option key={task.id} value={task.id} className="bg-surface text-ink">
-            {task.title} ({getStatusLabel(task.status)})
-          </option>
-        ))}
-      </select>
+        onChange={handleSelect}
+        options={taskOptions}
+        aria-label="Active task"
+        className="max-w-[260px] truncate"
+      />
     </div>
   );
 };

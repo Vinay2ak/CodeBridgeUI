@@ -37,6 +37,45 @@ The query parameter is stripped immediately using `history.replaceState` after b
 
 ---
 
+## Select Component
+
+Accessible, custom frosted-glass combobox component complying with the WAI-ARIA select-only pattern.
+
+### API
+```tsx
+<Select
+  id?: string
+  value: string
+  onChange: (value: string) => void
+  onBlur?: () => void
+  name?: string
+  options: SelectOption[] // { value, label, description?, disabled?, tone?: "success" | "primary" | "muted" }
+  placeholder?: string     // Default "Select…"
+  disabled?: boolean
+  invalid?: boolean
+  required?: boolean
+  size?: "md" | "sm"       // "md" (40px) or "sm" (32px)
+  aria-label?: string
+  aria-labelledby?: string
+  aria-describedby?: string
+  className?: string
+/>
+```
+
+### Keyboard Shortcuts (Focus on Trigger)
+| Key | Action |
+| :--- | :--- |
+| `Enter` / `Space` / `ArrowDown` / `ArrowUp` | Open popover (when closed). |
+| `ArrowDown` / `ArrowUp` | Move active option with boundary clamping (skips disabled). |
+| `Home` / `End` | Jump to first / last enabled option. |
+| `PageUp` / `PageDown` | Jump 10 enabled options up / down. |
+| `Enter` / `Space` | Select active option and close popover. |
+| `Tab` | Select active option and advance focus to next focusable element. |
+| `Escape` | Dismiss popover without selecting (preserves parent dialogs). |
+| Printable characters | 500ms typeahead buffer (case-insensitive prefix match & cycling). |
+
+---
+
 ## Testing & Production Build
 
 ### Vitest Test Suite (Single Run)
