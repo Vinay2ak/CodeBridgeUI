@@ -25,12 +25,16 @@ function getDocTheme(): AppTheme {
 
 export interface AnalyticsPageProps {
   showHeader?: boolean;
+  hideToolbar?: boolean;
+  realtime?: boolean;
   user?: User | null;
   ownerId?: string;
 }
 
 export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   showHeader = true,
+  hideToolbar = false,
+  realtime = true,
   user,
   ownerId,
 }) => {
@@ -139,16 +143,17 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
     setIframeKey((k) => k + 1);
   };
 
-  // Derived URLs
+  // Derived URLs - use real-time refresh (5s) when in real-time mode
+  const activeRefresh = realtime ? '5s' : prefs.refresh;
   const embedUrl = useMemo(() => {
     if (!parsed.ok) return null;
     return buildEmbedUrl(parsed, {
       range: prefs.range,
-      refresh: prefs.refresh,
+      refresh: activeRefresh,
       theme,
       ownerId: effectiveOwnerId,
     });
-  }, [parsed, prefs.range, prefs.refresh, theme, effectiveOwnerId]);
+  }, [parsed, prefs.range, activeRefresh, theme, effectiveOwnerId]);
 
   const openUrl = useMemo(() => {
     if (!parsed.ok) return null;
@@ -178,110 +183,141 @@ export const AnalyticsPage: React.FC<AnalyticsPageProps> = ({
   }, [parsed.ok, mixedBlocked, isProbing, probeStatus]);
 
   return (
-    <div className="space-y-6">
-      {/* 1. Header */}
-      {showHeader ? (
-        <div className="border-b border-line pb-4 space-y-1">
-          <nav aria-label="Breadcrumb" className="text-xs text-muted">
-            Overview / Analytics
-          </nav>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-ink flex items-center gap-2">
-                <BarChart3 className="w-6 h-6 text-primary" aria-hidden="true" />
-                <span>Developer Analytics</span>
-              </h1>
-              <p className="text-xs text-muted mt-1">
-                Real-time telemetry and project counters from Grafana.
-              </p>
-            </div>
-            {effectiveOwnerId !== 'All' && (
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-canvas border border-line text-ink">
-                <UserCheck className="w-3.5 h-3.5 text-success" aria-hidden="true" />
-                <span>Personalized: {user?.displayName || effectiveOwnerId}</span>
-              </span>
+    <div className="space-y-4">
+      {hideToolbar ? (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-primary" aria-hidden="true" />
+            <h2 className="text-sm font-bold uppercase tracking-wider text-muted">
+              Live Grafana Analytics
+            </h2>
+          </div>
+          <div className="flex items-center gap-2.5">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-success-bg text-success border border-success-border uppercase">
+              <span className="w-1.5 h-1.5 rounded-full bg-success animate-ping" />
+              Real-Time Live (5s)
+            </span>
+            {openUrl && (
+              <a
+                href={openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open in Grafana (opens in a new tab)"
+                className="inline-flex items-center justify-center font-medium transition-colors rounded-lg px-2.5 py-1 text-xs gap-1.5 bg-raised text-ink border border-line hover:bg-canvas"
+              >
+                <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Open in Grafana</span>
+              </a>
             )}
           </div>
         </div>
       ) : (
-        <div className="border-b border-line pb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="text-base font-bold text-ink tracking-tight flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-primary" aria-hidden="true" />
-              <span>Platform & Personal Analytics</span>
-            </h3>
-            <p className="text-xs text-muted mt-0.5">
-              Live engineering metrics and test telemetry from Grafana.
-            </p>
-          </div>
-          {effectiveOwnerId !== 'All' && (
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-canvas border border-line text-ink">
-              <UserCheck className="w-3 h-3 text-success" aria-hidden="true" />
-              <span>Personal View</span>
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* 2. Toolbar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-line bg-surface shadow-sm">
-        <div className="flex flex-wrap items-center gap-4">
-          <TimeRangeControl
-            value={prefs.range}
-            onChange={handleRangeChange}
-            disabled={!parsed.ok}
-          />
-          <AutoRefreshControl
-            value={prefs.refresh}
-            onChange={handleRefreshIntervalChange}
-            disabled={!parsed.ok}
-          />
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleManualRefresh}
-            disabled={!parsed.ok || isProbing}
-            aria-label="Refresh analytics data"
-            className="text-xs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isProbing ? 'animate-spin' : ''}`} aria-hidden="true" />
-            <span>Refresh</span>
-          </Button>
-
-          {openUrl ? (
-            <a
-              href={openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Open in Grafana (opens in a new tab)"
-              className="inline-flex items-center justify-center font-medium transition-colors rounded-lg px-2.5 py-1 text-xs gap-1.5 bg-raised text-ink border border-line hover:bg-canvas"
-            >
-              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Open in Grafana</span>
-            </a>
+        <>
+          {/* 1. Header */}
+          {showHeader ? (
+            <div className="border-b border-line pb-4 space-y-1">
+              <nav aria-label="Breadcrumb" className="text-xs text-muted">
+                Overview / Analytics
+              </nav>
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold tracking-tight text-ink flex items-center gap-2">
+                    <BarChart3 className="w-6 h-6 text-primary" aria-hidden="true" />
+                    <span>Developer Analytics</span>
+                  </h1>
+                  <p className="text-xs text-muted mt-1">
+                    Real-time telemetry and project counters from Grafana.
+                  </p>
+                </div>
+                {effectiveOwnerId !== 'All' && (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-canvas border border-line text-ink">
+                    <UserCheck className="w-3.5 h-3.5 text-success" aria-hidden="true" />
+                    <span>Personalized: {user?.displayName || effectiveOwnerId}</span>
+                  </span>
+                )}
+              </div>
+            </div>
           ) : (
-            <button
-              type="button"
-              disabled
-              aria-label="Open in Grafana"
-              className="inline-flex items-center justify-center font-medium rounded-lg opacity-50 pointer-events-none px-2.5 py-1 text-xs gap-1.5 bg-raised text-ink border border-line"
-            >
-              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Open in Grafana</span>
-            </button>
+            <div className="border-b border-line pb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-base font-bold text-ink tracking-tight flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-primary" aria-hidden="true" />
+                  <span>Platform & Personal Analytics</span>
+                </h3>
+                <p className="text-xs text-muted mt-0.5">
+                  Live engineering metrics and test telemetry from Grafana.
+                </p>
+              </div>
+              {effectiveOwnerId !== 'All' && (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-mono bg-canvas border border-line text-ink">
+                  <UserCheck className="w-3 h-3 text-success" aria-hidden="true" />
+                  <span>Personal View</span>
+                </span>
+              )}
+            </div>
           )}
-        </div>
-      </div>
 
-      {/* 3. Status Line */}
-      <StatusLine
-        status={statusLineState}
-        host={host}
-        lastChecked={lastChecked}
-      />
+          {/* 2. Toolbar */}
+          <div className="flex flex-wrap items-center justify-between gap-4 p-3 rounded-xl border border-line bg-surface shadow-sm">
+            <div className="flex flex-wrap items-center gap-4">
+              <TimeRangeControl
+                value={prefs.range}
+                onChange={handleRangeChange}
+                disabled={!parsed.ok}
+              />
+              <AutoRefreshControl
+                value={prefs.refresh}
+                onChange={handleRefreshIntervalChange}
+                disabled={!parsed.ok}
+              />
+            </div>
+
+            <div className="flex items-center gap-2.5">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleManualRefresh}
+                disabled={!parsed.ok || isProbing}
+                aria-label="Refresh analytics data"
+                className="text-xs"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${isProbing ? 'animate-spin' : ''}`} aria-hidden="true" />
+                <span>Refresh</span>
+              </Button>
+
+              {openUrl ? (
+                <a
+                  href={openUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open in Grafana (opens in a new tab)"
+                  className="inline-flex items-center justify-center font-medium transition-colors rounded-lg px-2.5 py-1 text-xs gap-1.5 bg-raised text-ink border border-line hover:bg-canvas"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Open in Grafana</span>
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  disabled
+                  aria-label="Open in Grafana"
+                  className="inline-flex items-center justify-center font-medium rounded-lg opacity-50 pointer-events-none px-2.5 py-1 text-xs gap-1.5 bg-raised text-ink border border-line"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>Open in Grafana</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 3. Status Line */}
+          <StatusLine
+            status={statusLineState}
+            host={host}
+            lastChecked={lastChecked}
+          />
+        </>
+      )}
 
       {/* 4. Embed Card */}
       <AnalyticsEmbedCard

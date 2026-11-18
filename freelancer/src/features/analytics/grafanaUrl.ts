@@ -1,5 +1,5 @@
 export type TimeRange = '1h' | '6h' | '24h' | '7d' | '30d';
-export type RefreshInterval = 'off' | '30s' | '1m' | '5m';
+export type RefreshInterval = 'off' | '5s' | '10s' | '30s' | '1m' | '5m';
 export type AppTheme = 'dark' | 'light';
 
 export interface ParsedGrafanaUrl {
