@@ -19,7 +19,6 @@ import type { ProjectScope } from "../services/project/types";
 import { TaskRadarView } from "../features/radar/TaskRadarView";
 import { ControlledWorkspaceView } from "../features/workspace/ControlledWorkspaceView";
 import { VerifiedPortfolioView } from "../features/portfolio/VerifiedPortfolioView";
-import { LivePill } from "../components/ui/LivePill";
 import { ThemeToggle } from "../components/ui/ThemeToggle";
 import { Menu, MenuItem } from "../components/ui/Menu";
 import { Chip } from "../components/ui/Chip";
@@ -48,8 +47,8 @@ export const Shell: React.FC<ShellProps> = ({
 }) => {
   void hasTasks;
   const [activeView, setActiveView] = useState<ActiveView>("radar");
-  const [selectedProjectId, setSelectedProjectId] = useState<string>(
-    currentTaskId || "proj_1024"
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    currentTaskId || null
   );
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [devDrawerOpen, setDevDrawerOpen] = useState(false);
@@ -71,12 +70,12 @@ export const Shell: React.FC<ShellProps> = ({
   // Automatically select the real project from backend when loaded
   useEffect(() => {
     if (projects && projects.length > 0) {
-      if (!currentTaskId || selectedProjectId === "proj_1024") {
+      if (!selectedProjectId) {
         const found = currentTaskId
           ? projects.find((p: ProjectScope) => p.id === currentTaskId)
           : undefined;
         const target = found || projects[0];
-        if (target && target.id !== selectedProjectId) {
+        if (target) {
           setSelectedProjectId(target.id);
         }
       }
@@ -129,9 +128,9 @@ export const Shell: React.FC<ShellProps> = ({
     },
     {
       key: "portfolio" as const,
-      label: "Portfolio",
+      label: "Profile",
       icon: Award,
-      description: "Verified proofs & earnings",
+      description: "Verified profile & engineering records",
     },
   ];
 
@@ -286,13 +285,12 @@ export const Shell: React.FC<ShellProps> = ({
             <h1 className="text-sm sm:text-base font-bold text-ink">
               {activeView === "radar" && "Tasks Radar"}
               {activeView === "workspace" && "Controlled Workspace"}
-              {activeView === "portfolio" && "Verified Portfolio"}
+              {activeView === "portfolio" && "Profile"}
             </h1>
           </div>
 
-          {/* Right Section: Status Pill, Theme Toggle, Profile Menu */}
+          {/* Right Section: Theme Toggle, Profile Menu (Offline/Online removed) */}
           <div className="flex items-center gap-2.5 sm:gap-3.5 shrink-0">
-            <LivePill />
             <ThemeToggle />
 
             <Menu
@@ -380,7 +378,7 @@ export const Shell: React.FC<ShellProps> = ({
           <DevDrawer
             open={devDrawerOpen}
             onClose={() => setDevDrawerOpen(false)}
-            taskId={selectedProjectId}
+            taskId={selectedProjectId || ""}
           />
         </React.Suspense>
       )}
